@@ -20,6 +20,15 @@ class AppService:
         """Return the Google API key as JSON for frontend use."""
         return jsonify({"apiKey": self.google_api_key})
 
+    def check_database_connection(self):
+        """Check if the database connection is working."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.execute("SELECT 1")  # Run a simple query to verify the connection
+            conn.close()
+            return True
+        except sqlite3.OperationalError:
+            return False
 
     def process_coordinates(self, coords):
         """Process each coordinate and fetch, store, and rank places."""

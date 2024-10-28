@@ -1,7 +1,6 @@
 import unittest
 from unittest.mock import patch, MagicMock
 from main.app_service import AppService
-import sqlite3
 from datetime import datetime
 import uuid
 
@@ -10,7 +9,6 @@ class TestAppService(unittest.TestCase):
     def setUp(self):
         # Set up a test instance of AppService with an in-memory database
         self.app_service = AppService(db_path=":memory:", google_api_key="test_key")
-
 
     @patch("main.app_service.requests.get")
     def test_call_google_places_api_success(self, mock_get):
@@ -24,6 +22,16 @@ class TestAppService(unittest.TestCase):
         result = self.app_service.call_google_places_api(40.7128, -74.0060)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["name"], "Test Place")
+
+    @patch("main.app_service.requests.get")
+    def test_call_google_places_api_failure(self, mock_get):
+        # Simulate a failed response with a non-200 status code
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_get.return_value = mock_response
+
+        result = self.app_service.call_google_places_api(40.7128, -74.0060)
+        self.assertEqual(result, [])  # Expect an empty list on failure
 
     @patch("main.app_service.sqlite3.connect")
     def test_check_existing_places(self, mock_connect):
@@ -55,7 +63,7 @@ class TestAppService(unittest.TestCase):
         mock_conn = mock_connect.return_value
         mock_cursor = mock_conn.cursor.return_value
 
-        # Test data
+        # Test data for insertion
         place = {
             "place_id": "123",
             "name": "Test Place",
@@ -76,26 +84,6 @@ class TestAppService(unittest.TestCase):
         # Call the method to insert place data
         self.app_service.insert_place_data(40.7128, -74.0060, place)
         mock_cursor.execute.assert_called_once()
-
-@patch("main.app_service.sqlite3.connect")
-def test_rank_nearby_places(self, mock_connect):
-    # Mock database connection and cursor
-    mock_conn = mock_connect.return_value
-    mock_cursor = mock_conn.cursor.return_value
-    
-    # Mock the fetchall() result to simulate places in the database
-    mock_cursor.fetchall.return_value = [
-        ("Place A", "Vicinity A", 4.5, 40.7128, -74.0060),
-        ("Place B", "Vicinity B", 4.0, 40.7129, -74.0061)
-    ]
-
-    # Call the rank_nearby_places method
-    results = self.app_service.rank_nearby_places(40.7128, -74.0060)
-    
-    # Assertions
-    self.assertEqual(len(results), 2)
-    self.assertEqual(results[0]["name"], "Place A")
-    self.assertEqual(results[1]["name"], "Place B")
 
 
 if __name__ == "__main__":

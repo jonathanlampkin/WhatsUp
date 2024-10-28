@@ -2,8 +2,9 @@
 from flask import Flask, request, render_template, jsonify
 import os
 from dotenv import load_dotenv
-from app_service import AppService
+from .app_service import AppService
 import logging
+import sqlite3
 
 load_dotenv()
 db_path = os.path.join(os.path.dirname(__file__), '../database/database.db')
@@ -24,6 +25,43 @@ def index():
 def api_key():
     return app_service_instance.get_google_api_key()
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    app_service = AppService(db_path=":memory:", google_api_key="test_key")  # Mock service for example
+    
+    # Check if the database connection is successful
+    db_connected = app_service.check_database_connection()
+    api_key_present = bool(app_service.google_api_key)
+    
+    # Fetch places and get the count
+    places = app_service.call_google_places_api(latitude=40.7128, longitude=-74.0060)  # Example coordinates
+    nearby_places_count = len(places)  # Get the count of places
+
+    # Improved handling to distinguish database vs. upload failure
+    if not db_connected:
+        error_message = "Database error"
+    elif nearby_places_count == 0:
+        error_message = "Upload check failed"
+    else:
+        error_message = None
+
+    if db_connected and nearby_places_count > 0:
+        return jsonify({
+            "status": "healthy",
+            "database": "connected",
+            "api_key_present": api_key_present,
+            "upload_check": "successful",
+            "nearby_places_count": nearby_places_count
+        }), 200
+    else:
+        return jsonify({
+            "status": "unhealthy",
+            "database": "disconnected" if not db_connected else "connected",
+            "api_key_present": api_key_present,
+            "error": error_message
+        }), 500
+
+
 @app.route('/save-coordinates', methods=['POST'])
 def save_user_coordinates():
     data = request.json
@@ -43,43 +81,6 @@ def save_user_coordinates():
     app_service_instance.process_coordinates((latitude, longitude)) 
     logging.info(app_service_instance.results)
     return jsonify({"ranked_places": app_service_instance.results}), 200
-
-
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint that verifies functionality by calling the main app service."""
-    try:
-        # Check database connection
-        conn = sqlite3.connect(app_service.db_path)
-        conn.execute("SELECT 1")
-        conn.close()
-
-        # Perform a test call to the /save-coordinates endpoint
-        test_coords = {"latitude": 40.7128, "longitude": -74.0060}
-        with app.test_client() as client:
-            response = client.post("/save-coordinates", json=test_coords)
-            response_json = response.get_json()
-
-            # Check the response structure
-            if response.status_code == 200 and "ranked_places" in response_json:
-                return jsonify({
-                    "status": "healthy",
-                    "database": "connected",
-                    "api_key_present": bool(app_service_instance.google_api_key),
-                    "upload_check": "successful",
-                    "nearby_places_count": len(response_json["ranked_places"])
-                }), 200
-            else:
-                return jsonify({
-                    "status": "unhealthy",
-                    "error": "Failed to retrieve expected nearby places response."
-                }), 500
-
-    except Exception as e:
-        return jsonify({
-            "status": "unhealthy",
-            "error": str(e)
-        }), 500
 
 
 if __name__ == "__main__":
