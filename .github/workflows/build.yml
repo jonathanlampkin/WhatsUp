@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
   push:
@@ -27,3 +27,22 @@ jobs:
       - name: Run unit tests
         run: |
           python -m unittest discover -s testing
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build  # Ensures deployment only happens if tests pass
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v2
+
+      - name: Log in to Heroku Container Registry
+        run: |
+          echo "$HEROKU_API_KEY" | docker login --username="$HEROKU_USERNAME" --password-stdin registry.heroku.com
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          HEROKU_USERNAME: ${{ secrets.HEROKU_USERNAME }}
+
+      - name: Build, push, and release container to Heroku
+        run: |
+          heroku container:push web --app ${{ secrets.HEROKU_APP_NAME }}
+          heroku container:release web --app ${{ secrets.HEROKU_APP_NAME }}
