@@ -72,6 +72,7 @@ def health_check():
             "error": "Upload check failed" if nearby_places_count == 0 else "Database error"
         }), 500
 
+# app.py
 @app.route('/save-coordinates', methods=['POST'])
 def save_user_coordinates():
     data = request.json
@@ -88,9 +89,10 @@ def save_user_coordinates():
     if not all(isinstance(c, float) and round(c, 4) == c for c in [latitude, longitude]):
         return jsonify({"error": "Coordinates must be floats with 4 decimal places"}), 400
 
-    app_service_instance.process_coordinates((latitude, longitude)) 
-    logging.info(app_service_instance.results)
-    return jsonify({"ranked_places": app_service_instance.results}), 200
+    # Send coordinates to RabbitMQ
+    app_service_instance.send_coordinates(latitude, longitude)
+    return jsonify({"status": "Coordinates sent to RabbitMQ"}), 200
+
 
 if __name__ == "__main__":
     app.run(debug=True)

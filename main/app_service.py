@@ -8,13 +8,68 @@ from flask import jsonify
 from dotenv import load_dotenv
 import logging
 
+# app_service.py
+import os
+import pika  # RabbitMQ
+import sqlite3
+import uuid
+from datetime import datetime
+from dotenv import load_dotenv
+import json
+import logging
+import requests
+
 class AppService:
     def __init__(self, db_path, google_api_key=None):
         self.db_path = db_path
         self.google_api_key = google_api_key
-        self.coords = []
         self.places = []
         self.results = []
+        load_dotenv()
+
+    def get_rabbitmq_connection(self):
+        rabbitmq_url = os.getenv("RABBITMQ_URL")
+        params = pika.URLParameters(rabbitmq_url)
+        return pika.BlockingConnection(params)
+
+    def send_coordinates(self, latitude, longitude):
+        connection = self.get_rabbitmq_connection()
+        channel = connection.channel()
+        queue_name = "coordinates_queue"
+        channel.queue_declare(queue=queue_name)
+
+        # Publish the coordinates as a message
+        message = json.dumps({"latitude": latitude, "longitude": longitude})
+        channel.basic_publish(exchange='', routing_key=queue_name, body=message)
+        print(f" [x] Sent {message} to RabbitMQ")
+        connection.close()
+
+    def receive_coordinates(self, queue_name="coordinates_queue"):
+        connection = self.get_rabbitmq_connection()
+        channel = connection.channel()
+        channel.queue_declare(queue=queue_name)
+
+        def callback(ch, method, properties, body):
+            coords = json.loads(body)
+            latitude = coords['latitude']
+            longitude = coords['longitude']
+            print(f" [x] Received coordinates {latitude}, {longitude}")
+            self.process_coordinates(latitude, longitude)
+
+        channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=True)
+        print(' [*] Waiting for coordinates. To exit press CTRL+C')
+        channel.start_consuming()
+
+    def process_coordinates(self, latitude, longitude):
+        """Process coordinates by checking for existing places and fetching new data if needed."""
+        if self.check_existing_places(latitude, longitude):
+            self.rank_nearby_places(latitude, longitude)
+        else:
+            self.generate_entry(latitude, longitude)
+            self.call_google_places_api(latitude, longitude)
+            for place in self.places:
+                self.insert_place_data(latitude, longitude, place)
+            self.rank_nearby_places(latitude, longitude)
 
     def get_google_api_key(self):
         """Return the Google API key as JSON for frontend use."""

@@ -1,13 +1,11 @@
-import pika
+# consumer.py
+import os
+from main.app_service import AppService
 
-def receive_message(queue_name):
-    connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
-    channel = connection.channel()
-    channel.queue_declare(queue=queue_name)
+# Initialize AppService with necessary configs
+db_path = os.path.join(os.path.dirname(__file__), 'database/database.db')
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+app_service = AppService(db_path=db_path, google_api_key=GOOGLE_API_KEY)
 
-    def callback(ch, method, properties, body):
-        print(f" [x] Received {body}")
-
-    channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=True)
-    print(' [*] Waiting for messages. To exit press CTRL+C')
-    channel.start_consuming()
+# Start consuming coordinates
+app_service.receive_coordinates()
