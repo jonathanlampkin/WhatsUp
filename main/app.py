@@ -144,6 +144,32 @@ def get_nearby_places():
     return jsonify({"places": places}), 200
 
 
+@app.route('/get-ranked-places', methods=['POST'])
+def get_ranked_places():
+    data = request.json
+    latitude = data.get('latitude')
+    longitude = data.get('longitude')
+
+    if latitude is None or longitude is None:
+        return jsonify({"error": "Invalid coordinates"}), 400
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT name, vicinity, rating FROM ranked_nearby_places
+        WHERE latitude = ? AND longitude = ?
+        ORDER BY rating DESC
+    ''', (latitude, longitude))
+    rows = cursor.fetchall()
+    conn.close()
+
+    ranked_places = [
+        {"name": row[0], "vicinity": row[1], "rating": row[2]}
+        for row in rows
+    ]
+    return jsonify({"ranked_places": ranked_places}), 200
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     logging.debug("Starting Flask application.")

@@ -8,8 +8,10 @@ conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
 # Drop tables if they already exist for a fresh setup
+# Uncomment below if needed
 # cursor.execute('DROP TABLE IF EXISTS user_coordinates')
 # cursor.execute('DROP TABLE IF EXISTS google_nearby_places')
+# cursor.execute('DROP TABLE IF EXISTS ranked_nearby_places')
 
 # Create user_coordinates table
 cursor.execute('''
@@ -22,7 +24,7 @@ cursor.execute('''
     )
 ''')
 
-# Create google_nearby_places table without viewport fields
+# Create google_nearby_places table
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS google_nearby_places (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,6 +45,19 @@ cursor.execute('''
         photo_height INTEGER,
         photo_width INTEGER,
         open_now BOOLEAN
+    )
+''')
+
+# Create ranked_nearby_places table to store ranked places for each unique coordinate pair
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS ranked_nearby_places (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        latitude REAL,
+        longitude REAL,
+        name TEXT,
+        vicinity TEXT,
+        rating REAL,
+        UNIQUE(latitude, longitude, name)  -- Ensure unique entries per coordinate and place name
     )
 ''')
 

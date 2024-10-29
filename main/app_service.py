@@ -9,8 +9,6 @@ from dotenv import load_dotenv
 import logging
 import pika  # RabbitMQ
 
-
-
 class AppService:
     def __init__(self, db_path, google_api_key=None):
         self.db_path = db_path
@@ -26,15 +24,16 @@ class AppService:
 
         while self.coords:
             latitude, longitude = self.coords.pop(0)
-            if self.check_existing_places(latitude, longitude):
-                self.rank_nearby_places(latitude, longitude)
-            else:
-                # Load Google API key from .env only if required
+            if not self.check_existing_places(latitude, longitude):
+                # Fetch and store places if not already in the database
                 self.generate_entry(latitude, longitude)
                 self.call_google_places_api(latitude, longitude)
                 for place in self.places:
                     self.insert_place_data(latitude, longitude, place)
-                self.rank_nearby_places(latitude, longitude)
+
+            # Rank and store ranked places for each unique coordinate pair
+            ranked_places = self.rank_nearby_places(latitude, longitude)
+            self.store_ranked_nearby_places(latitude, longitude, ranked_places)
 
     def get_rabbitmq_connection(self):
         rabbitmq_url = os.getenv("RABBITMQ_URL")
@@ -50,9 +49,8 @@ class AppService:
         # Publish the coordinates as a message
         message = json.dumps({"latitude": latitude, "longitude": longitude})
         channel.basic_publish(exchange='', routing_key=queue_name, body=message)
-        print(f" [x] Sent {message} to RabbitMQ")
+        logging.info(f"[x] Sent {message} to RabbitMQ")
         connection.close()
-
 
     def get_google_api_key(self):
         """Return the Google API key as JSON for frontend use."""
@@ -67,9 +65,6 @@ class AppService:
             return True
         except sqlite3.OperationalError:
             return False
-
-
-                
 
     def check_existing_places(self, latitude, longitude):
         """Check if places exist at the given coordinates in the database."""
@@ -117,7 +112,6 @@ class AppService:
         else:
             print(f"Error Google Places API Response: {response.status_code} - {response.text}")
         return self.places
-
 
     def insert_place_data(self, latitude, longitude, place):
         """Insert a single place entry into the database."""
@@ -167,20 +161,37 @@ class AppService:
                     name, vicinity, rating, latitude, longitude, 
                     (ABS(latitude - ?) + ABS(longitude - ?)) AS proximity
                 FROM google_nearby_places
-                WHERE open_now = 1
+                WHERE latitude = ? AND longitude = ?
                 ORDER BY rating DESC, proximity ASC
                 LIMIT 10;
                 '''
-                cursor.execute(query, (latitude, longitude))
+                cursor.execute(query, (latitude, longitude, latitude, longitude))
                 results = cursor.fetchall()
                 self.results = [
                     {"name": row[0], "vicinity": row[1], "rating": row[2], "latitude": row[3], "longitude": row[4]}
                     for row in results
                 ]
+                logging.debug(f"Ranked places: {self.results}")
                 return self.results
         except sqlite3.Error as e:
-            print(f"Database error: {e}")
+            logging.error(f"Database error: {e}")
             self.results = []
             return self.results
-            
-# easter egg
+
+    def store_ranked_nearby_places(self, latitude, longitude, ranked_places):
+        """Store ranked nearby places for each unique coordinates pair."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        for place in ranked_places:
+            try:
+                cursor.execute('''
+                    INSERT OR IGNORE INTO ranked_nearby_places (
+                        latitude, longitude, name, vicinity, rating
+                    ) VALUES (?, ?, ?, ?, ?)
+                ''', (latitude, longitude, place['name'], place['vicinity'], place['rating']))
+            except sqlite3.DatabaseError as e:
+                logging.error(f"Error saving ranked nearby place: {e}")
+
+        conn.commit()
+        conn.close()
