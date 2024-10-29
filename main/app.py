@@ -46,18 +46,14 @@ def index():
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    logging.debug("Starting health check.")
     db_connected = app_service_instance.check_database_connection()
     api_key_present = bool(app_service_instance.google_api_key)
     
-    # Example coordinates for health check API call
+    # Fetch places and get the count
     places = app_service_instance.call_google_places_api(latitude=40.7128, longitude=-74.0060)
     nearby_places_count = len(places)
-    logging.debug(f"Health check found {nearby_places_count} places.")
 
-    # Health status response
     if db_connected and nearby_places_count > 0:
-        logging.debug("Health check status: healthy")
         return jsonify({
             "status": "healthy",
             "database": "connected",
@@ -66,8 +62,7 @@ def health_check():
             "nearby_places_count": nearby_places_count
         }), 200
     else:
-        error_message = "Upload check failed" if nearby_places_count == 0 else "Database error"
-        logging.warning(f"Health check status: unhealthy - {error_message}")
+        error_message = "Database error" if not db_connected else "Upload check failed"
         return jsonify({
             "status": "unhealthy",
             "database": "disconnected" if not db_connected else "connected",
@@ -75,23 +70,24 @@ def health_check():
             "error": error_message
         }), 500
 
+
 @app.route('/save-coordinates', methods=['POST'])
 def save_user_coordinates():
     data = request.json
     latitude = data.get('latitude')
     longitude = data.get('longitude')
-    
+
     if latitude is None or longitude is None:
-        logging.error("Invalid coordinates received in save-coordinates.")
         return jsonify({"error": "Invalid coordinates"}), 400
 
-    # Log the received coordinates
-    logging.debug(f"Received coordinates for saving: {latitude}, {longitude}")
+    # Process coordinates
+    latitude = round(float(latitude), 4)
+    longitude = round(float(longitude), 4)
 
     # Send coordinates to RabbitMQ
     app_service_instance.send_coordinates(latitude, longitude)
-    logging.info("Coordinates sent to RabbitMQ.")
     return jsonify({"status": "Coordinates sent to RabbitMQ"}), 200
+
 
 
 @app.route('/get-nearby-places', methods=['POST'])

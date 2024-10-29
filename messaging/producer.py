@@ -15,7 +15,9 @@ def send_message(queue_name, message):
         # Declare the queue (idempotent declaration)
         channel.queue_declare(queue=queue_name)
 
-        # Publish message
-        message_body = json.dumps(message)  # Ensure message is JSON-formatted
+        # Ensure the message is JSON-formatted
+        message_body = json.dumps(message)
+
+        # Publish the JSON-formatted message
         channel.basic_publish(exchange='', routing_key=queue_name, body=message_body)
         print(f" [x] Sent '{message_body}' to {queue_name}")

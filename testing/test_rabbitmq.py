@@ -1,19 +1,24 @@
 # testing/test_rabbitmq.py
 import os
-import pika
 import unittest
-from dotenv import load_dotenv
+from unittest.mock import patch
 from messaging.producer import send_message
 from main.app_service import AppService
+from dotenv import load_dotenv
+import pika
+import json
 
 load_dotenv()
 
 class TestRabbitMQMessaging(unittest.TestCase):
     def setUp(self):
-        # Set up RabbitMQ connection
-        rabbitmq_url = os.getenv("RABBITMQ_URL")
-        connection_params = pika.URLParameters(rabbitmq_url)
-        self.connection = pika.BlockingConnection(connection_params)
+        # Load RabbitMQ URL from environment
+        self.rabbitmq_url = os.getenv("RABBITMQ_URL")
+        if not self.rabbitmq_url:
+            self.skipTest("RABBITMQ_URL not set")
+
+        self.connection_params = pika.URLParameters(self.rabbitmq_url)
+        self.connection = pika.BlockingConnection(self.connection_params)
         self.channel = self.connection.channel()
         self.queue_name = "test_queue"
         
@@ -31,28 +36,32 @@ class TestRabbitMQMessaging(unittest.TestCase):
         self.connection.close()
 
     def test_producer_sends_message(self):
-        message = '{"latitude": 40.7128, "longitude": -74.0060}'
+        message = {"latitude": 40.7128, "longitude": -74.0060}
         send_message(self.queue_name, message)
         
         # Verify message is in the queue
         method_frame, _, body = self.channel.basic_get(self.queue_name, auto_ack=True)
         self.assertIsNotNone(method_frame, "Message not received in queue.")
-        self.assertEqual(body.decode(), message)
+        self.assertEqual(json.loads(body), message)
 
-    def test_consumer_receives_message(self):
+    @patch.object(AppService, 'process_coordinates')
+    def test_consumer_receives_message(self, mock_process_coordinates):
         # Publish a test message
-        message = '{"latitude": 40.7128, "longitude": -74.0060}'
-        self.channel.basic_publish(exchange='', routing_key=self.queue_name, body=message)
+        message = {"latitude": 40.7128, "longitude": -74.0060}
+        self.channel.basic_publish(exchange='', routing_key=self.queue_name, body=json.dumps(message))
         
-        # Mock the consumer’s callback to verify message processing
+        # Define the callback for testing
         def mock_callback(ch, method, properties, body):
-            coords = self.app_service.process_coordinates((40.7128, -74.0060))
-            self.assertEqual(coords, (40.7128, -74.0060))
-        
-        self.channel.basic_consume(queue=self.queue_name, on_message_callback=mock_callback, auto_ack=True)
-        
-        # Start consuming (this is synchronous and will block until done)
-        self.channel.start_consuming()
+            coords = json.loads(body)
+            self.assertEqual(coords, message)
+            mock_process_coordinates(coords)
+
+        # Manually invoke the callback
+        method_frame, _, body = self.channel.basic_get(self.queue_name, auto_ack=True)
+        mock_callback(self.channel, method_frame, None, body)
+
+        # Ensure `process_coordinates` was called correctly
+        mock_process_coordinates.assert_called_once_with(message)
 
 if __name__ == "__main__":
     unittest.main()

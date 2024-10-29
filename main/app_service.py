@@ -151,8 +151,6 @@ class AppService:
             photo_data["photo_reference"] if photo_data else None,
             photo_data["height"] if photo_data else None,
             photo_data["width"] if photo_data else None,
-            place.get("plus_code", {}).get("compound_code"),
-            place.get("plus_code", {}).get("global_code"),
             place.get("opening_hours", {}).get("open_now", None)
         )
 
@@ -161,8 +159,8 @@ class AppService:
                 latitude, longitude, place_id, name, business_status, rating, 
                 user_ratings_total, vicinity, types, price_level, icon, 
                 icon_background_color, icon_mask_base_uri, photo_reference, 
-                photo_height, photo_width, plus_code, compound_code, global_code, open_now
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                photo_height, photo_width, open_now
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', data_tuple)
 
         conn.commit()
