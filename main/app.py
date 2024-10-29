@@ -25,10 +25,11 @@ response_counter = Counter('response_count', 'Total number of responses')
 
 @app.route('/get-google-maps-key')
 def get_google_maps_key():
-    """Serve the Google Maps API key securely."""
+    print("Google Maps Key endpoint accessed")
     if not GOOGLE_API_KEY:
-        abort(404)  # Send 404 if API key is not set
+        abort(404)
     return jsonify({"key": GOOGLE_API_KEY})
+
 
 # Track requests for Prometheus
 @app.before_request
@@ -94,7 +95,23 @@ def save_user_coordinates():
 
     # Send coordinates to RabbitMQ
     app_service_instance.send_coordinates(latitude, longitude)
-    return jsonify({"status": "Coordinates sent to RabbitMQ"}), 200
+
+    # Store coordinates in the database
+    visitor_id = app_service_instance.generate_entry(latitude, longitude)
+    if visitor_id:
+        return jsonify({"status": "Coordinates sent to RabbitMQ and saved in database"}), 200
+    else:
+        return jsonify({"error": "Failed to save coordinates"}), 500
+
+
+@app.route('/get-all-coordinates', methods=['GET'])
+def get_all_coordinates():
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM user_coordinates")
+    rows = cursor.fetchall()
+    conn.close()
+    return jsonify(rows)
 
 
 
