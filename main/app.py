@@ -3,9 +3,10 @@ from flask import Flask, request, render_template, jsonify, Response, abort
 import os
 from dotenv import load_dotenv
 from .app_service import AppService
-from prometheus_client import Counter, generate_latest
+from prometheus_client import Counter, Histogram, generate_latest
 import logging
 import sqlite3
+import time
 
 # Load environment variables
 load_dotenv()
@@ -19,9 +20,13 @@ app = Flask(__name__,
 # Initialize AppService with the database path and Google API key
 app_service_instance = AppService(db_path=db_path, google_api_key=GOOGLE_API_KEY)
 
-# Prometheus counters
+# Prometheus metrics
 request_counter = Counter('request_count', 'Total number of requests')
 response_counter = Counter('response_count', 'Total number of responses')
+coordinates_saved_counter = Counter('coordinates_saved_total', 'Total number of coordinates saved')
+api_call_counter = Counter('google_api_calls_total', 'Total number of Google API calls')
+response_time_histogram = Histogram('response_time_seconds', 'Response time for endpoints', ['endpoint'])
+errors_counter = Counter('errors_total', 'Total number of errors')
 
 
 @app.route('/get-google-maps-key')
@@ -38,21 +43,25 @@ def before_request():
     logging.debug("Incrementing request counter.")
     request_counter.inc()
 
+
 @app.after_request
 def after_request(response):
     logging.debug("Incrementing response counter.")
     response_counter.inc()
     return response
 
+
 # Endpoint for Prometheus metrics
 @app.route('/metrics')
 def metrics():
     return Response(generate_latest(), mimetype='text/plain')
 
+
 @app.route('/')
 def index():
     logging.debug("Rendering index.html for user.")
     return render_template('index.html')
+
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -83,11 +92,13 @@ def health_check():
 
 @app.route('/save-coordinates', methods=['POST'])
 def save_user_coordinates():
+    start_time = time.time()
     data = request.json
     latitude = data.get('latitude')
     longitude = data.get('longitude')
 
     if latitude is None or longitude is None:
+        errors_counter.inc()
         return jsonify({"error": "Invalid coordinates"}), 400
 
     # Process coordinates
@@ -98,19 +109,22 @@ def save_user_coordinates():
     visitor_id = app_service_instance.generate_entry(latitude, longitude)
     if not visitor_id:
         logging.error("Failed to save coordinates in database")
+        errors_counter.inc()
         return jsonify({"error": "Failed to save coordinates"}), 500
     
     # If saving to the database was successful, proceed to send coordinates to RabbitMQ
     app_service_instance.send_coordinates(latitude, longitude)
     logging.debug(f"Coordinates saved and sent to RabbitMQ: {latitude}, {longitude}")
     
+    coordinates_saved_counter.inc()  # Increment coordinates saved counter
+    response_time_histogram.labels(endpoint='/save-coordinates').observe(time.time() - start_time)  # Track response time
+    
     return jsonify({"status": "Coordinates saved in database and sent to RabbitMQ"}), 200
-
-
 
 
 @app.route('/get-all-coordinates', methods=['GET'])
 def get_all_coordinates():
+    start_time = time.time()
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute("SELECT visitor_id, latitude, longitude, timestamp FROM user_coordinates")
@@ -123,17 +137,19 @@ def get_all_coordinates():
         for row in rows
     ]
     logging.debug(f"Retrieved coordinates: {coordinates}")
+    response_time_histogram.labels(endpoint='/get-all-coordinates').observe(time.time() - start_time)
     return jsonify({"coordinates": coordinates})
-
 
 
 @app.route('/get-nearby-places', methods=['POST'])
 def get_nearby_places():
+    start_time = time.time()
     data = request.json
     latitude = data.get('latitude')
     longitude = data.get('longitude')
 
     if latitude is None or longitude is None:
+        errors_counter.inc()
         return jsonify({"error": "Invalid coordinates"}), 400
 
     # Use the AppService instance to get places
@@ -141,16 +157,21 @@ def get_nearby_places():
     if not places:
         return jsonify({"error": "No places found"}), 404
 
-    return jsonify({"places": places}), 200
+    api_call_counter.inc()  # Increment Google API call counter
+    response_time_histogram.labels(endpoint='/get-nearby-places').observe(time.time() - start_time)
+    
+    return jsonify({"places": places})
 
 
 @app.route('/get-ranked-places', methods=['POST'])
 def get_ranked_places():
+    start_time = time.time()
     data = request.json
     latitude = data.get('latitude')
     longitude = data.get('longitude')
 
     if latitude is None or longitude is None:
+        errors_counter.inc()
         return jsonify({"error": "Invalid coordinates"}), 400
 
     conn = sqlite3.connect(db_path)
@@ -167,7 +188,8 @@ def get_ranked_places():
         {"name": row[0], "vicinity": row[1], "rating": row[2]}
         for row in rows
     ]
-    return jsonify({"ranked_places": ranked_places}), 200
+    response_time_histogram.labels(endpoint='/get-ranked-places').observe(time.time() - start_time)
+    return jsonify({"ranked_places": ranked_places})
 
 
 if __name__ == "__main__":
