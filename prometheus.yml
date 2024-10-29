@@ -1,10 +1,8 @@
-# prometheus.yml
 global:
-  scrape_interval: 30s  # Adjust scrape interval as needed
+  scrape_interval: 15s
 
 scrape_configs:
-  - job_name: 'heroku_flask_app'
+  - job_name: 'flask_app'
     metrics_path: '/metrics'
-    scheme: 'https'
     static_configs:
-      - targets: ['whatsup-8df2b91851a0.herokuapp.com']
+      - targets: ['app:5000']
