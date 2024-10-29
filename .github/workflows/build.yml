@@ -67,10 +67,10 @@ jobs:
           HEROKU_USERNAME: ${{ secrets.HEROKU_USERNAME }}
 
       - name: Build Docker container
-        run: docker build -t registry.heroku.com/${{ secrets.HEROKU_APP_NAME }}/web .
+        run: docker build -t registry.heroku.com/${{ secrets.HEROKU_APP_NAME | toLowerCase }}/web .
 
       - name: Push Docker container to Heroku
-        run: docker push registry.heroku.com/${{ secrets.HEROKU_APP_NAME }}/web
+        run: docker push registry.heroku.com/${{ secrets.HEROKU_APP_NAME | toLowerCase }}/web
 
       - name: Release container on Heroku
         run: heroku container:release web --app ${{ secrets.HEROKU_APP_NAME }}
