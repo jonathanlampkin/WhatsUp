@@ -3,7 +3,16 @@
 let map, userMarker, directionsService, directionsRenderer;
 const placesList = document.getElementById('places-list');
 
-// Initialize Map and User Location
+// Function to load Google Maps API dynamically with the fetched key
+function loadGoogleMapsApi(apiKey) {
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMap`;
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+}
+
+// Function to initialize the map and user location
 function initMap() {
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(position => {
@@ -90,5 +99,28 @@ function highlightPlace(place) {
     });
 }
 
-// Load Google Maps API directly with your proxy setup (assuming the server-side proxy is ready)
-initMap();
+// Fetch the Google Maps API key, cache it in localStorage, and load the map
+function fetchAndCacheGoogleMapsApiKey() {
+    const cachedApiKey = localStorage.getItem("google_maps_api_key");
+
+    if (cachedApiKey) {
+        console.log("Using cached Google Maps API key.");
+        loadGoogleMapsApi(cachedApiKey);
+    } else {
+        console.log("Fetching Google Maps API key from server.");
+        fetch('/get-google-maps-key')
+            .then(response => response.json())
+            .then(data => {
+                if (data.key) {
+                    localStorage.setItem("google_maps_api_key", data.key);
+                    loadGoogleMapsApi(data.key);
+                } else {
+                    console.error("API key not found in response.");
+                }
+            })
+            .catch(error => console.error("Error fetching Google Maps API key:", error));
+    }
+}
+
+// Fetch the API key and initialize the map
+fetchAndCacheGoogleMapsApiKey();

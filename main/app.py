@@ -1,5 +1,5 @@
 # main/app.py
-from flask import Flask, request, render_template, jsonify, Response
+from flask import Flask, request, render_template, jsonify, Response, abort
 import os
 from dotenv import load_dotenv
 from .app_service import AppService
@@ -21,6 +21,14 @@ app_service_instance = AppService(db_path=db_path, google_api_key=GOOGLE_API_KEY
 # Prometheus counters
 request_counter = Counter('request_count', 'Total number of requests')
 response_counter = Counter('response_count', 'Total number of responses')
+
+
+@app.route('/get-google-maps-key')
+def get_google_maps_key():
+    """Serve the Google Maps API key securely."""
+    if not GOOGLE_API_KEY:
+        abort(404)  # Send 404 if API key is not set
+    return jsonify({"key": GOOGLE_API_KEY})
 
 # Track requests for Prometheus
 @app.before_request
