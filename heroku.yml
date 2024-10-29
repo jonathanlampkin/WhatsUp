@@ -1,6 +1,5 @@
 build:
   docker:
-    web: Dockerfile
-
+    web: Dockerfile 
 run:
-  web: python -m main.app
+  web: gunicorn main.app:app --bind 0.0.0.0:$PORT
