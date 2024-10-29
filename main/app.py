@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from .app_service import AppService
 from prometheus_client import Counter, generate_latest
 import logging
+import sqlite3
 
 # Load environment variables
 load_dotenv()
@@ -112,7 +113,6 @@ def get_all_coordinates():
     rows = cursor.fetchall()
     conn.close()
     return jsonify(rows)
-
 
 
 @app.route('/get-nearby-places', methods=['POST'])
