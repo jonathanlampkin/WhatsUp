@@ -7,16 +7,9 @@ from datetime import datetime
 from flask import jsonify
 from dotenv import load_dotenv
 import logging
-
-import os
 import pika  # RabbitMQ
-import sqlite3
-import uuid
-from datetime import datetime
-from dotenv import load_dotenv
-import json
-import logging
-import requests
+
+
 
 class AppService:
     def __init__(self, db_path, google_api_key=None):
@@ -91,7 +84,6 @@ class AppService:
         return result is not None
 
     def generate_entry(self, latitude, longitude):
-        """Create an entry dictionary with rounded coordinates and a timestamp."""
         visitor_id = str(uuid.uuid4())
         timestamp = datetime.now().isoformat()
         try:
@@ -102,10 +94,11 @@ class AppService:
                 VALUES (?, ?, ?, ?)
             ''', (visitor_id, latitude, longitude, timestamp))
             conn.commit()
+            logging.info(f"Inserted coordinates: {latitude}, {longitude} with visitor_id: {visitor_id}")
             conn.close()
             return visitor_id
         except sqlite3.DatabaseError as e:
-            print(f"Error saving coordinates: {e}")
+            logging.error(f"Error saving coordinates: {e}")
             return None
 
     def call_google_places_api(self, latitude, longitude, radius=1500, place_type="restaurant"):
