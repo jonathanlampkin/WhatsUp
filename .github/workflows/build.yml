@@ -32,13 +32,29 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Set environment variables for tests
+        run: |
+          echo "Setting environment variables for tests"
+        env:
+          RABBITMQ_URL: "amqp://guest:guest@localhost:5672/"
+          GOOGLE_API_KEY: "dummy_key"
+
+      - name: Start RabbitMQ
+        run: |
+          sudo docker run -d --name rabbitmq -p 5672:5672 rabbitmq:3-management
+        timeout-minutes: 1
+
       - name: Run unit tests
         run: |
-          python -m unittest discover -s testing
+          python -m unittest discover -s testing/unit_tests
+
+      - name: Run integration tests
+        run: |
+          python -m unittest discover -s testing/integration_tests
 
   deploy:
     runs-on: ubuntu-latest
-    needs: build  # Ensures deployment only happens if tests pass
+    needs: build
 
     steps:
       - name: Check out the code

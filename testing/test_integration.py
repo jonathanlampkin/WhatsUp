@@ -3,28 +3,22 @@ import unittest
 from unittest.mock import patch, MagicMock
 from main.app import app
 from main.app_service import AppService
+import os
 
 class TestIntegration(unittest.TestCase):
-
     def setUp(self):
         app.config["TESTING"] = True
         self.client = app.test_client()
         self.app_service = AppService(db_path=":memory:", google_api_key="test_key")
 
+    @patch.dict(os.environ, {"RABBITMQ_URL": "amqp://guest:guest@localhost:5672/"})
     @patch("main.app_service.AppService.check_existing_places")
     @patch("main.app_service.AppService.insert_place_data")
-    @patch("main.app_service.AppService.process_coordinates")
-    def test_save_coordinates(self, mock_process_coordinates, mock_check_existing_places, mock_insert_place_data):
+    def test_save_coordinates(self, mock_check_existing_places, mock_insert_place_data):
         data = {"latitude": 40.7128, "longitude": -74.0060}
-        
-        # Mocking process_coordinates to simulate coordinate processing and place ranking
-        mock_process_coordinates.return_value = [{"name": "Test Place", "rating": 4.5}]
-        
         response = self.client.post("/save-coordinates", json=data)
         json_data = response.get_json()
-        
         self.assertEqual(response.status_code, 200)
-        self.assertIn("status", json_data)
         self.assertEqual(json_data["status"], "Coordinates sent to RabbitMQ")
 
     @patch("main.app_service.AppService.call_google_places_api")
