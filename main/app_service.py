@@ -8,7 +8,6 @@ from flask import jsonify
 from dotenv import load_dotenv
 import logging
 
-# app_service.py
 import os
 import pika  # RabbitMQ
 import sqlite3
