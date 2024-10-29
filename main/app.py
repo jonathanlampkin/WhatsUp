@@ -6,6 +6,7 @@ from .app_service import AppService
 from prometheus_client import Counter, generate_latest
 import logging
 
+# Load environment variables
 load_dotenv()
 db_path = os.path.join(os.path.dirname(__file__), '../database/database.db')
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -14,20 +15,22 @@ app = Flask(__name__,
             template_folder='../frontend/templates', 
             static_folder='../frontend/static')
 
-# Create a single instance of AppService without passing coordinates
+# Initialize AppService with the database path and Google API key
 app_service_instance = AppService(db_path=db_path, google_api_key=GOOGLE_API_KEY)
 
-# Define Prometheus counters
+# Prometheus counters
 request_counter = Counter('request_count', 'Total number of requests')
 response_counter = Counter('response_count', 'Total number of responses')
 
-# Track requests and responses for Prometheus
+# Track requests for Prometheus
 @app.before_request
 def before_request():
+    logging.debug("Incrementing request counter.")
     request_counter.inc()
 
 @app.after_request
 def after_request(response):
+    logging.debug("Incrementing response counter.")
     response_counter.inc()
     return response
 
@@ -38,25 +41,23 @@ def metrics():
 
 @app.route('/')
 def index():
+    logging.debug("Rendering index.html for user.")
     return render_template('index.html')
-
-@app.route('/api-key', methods=['GET'])
-def api_key():
-    return app_service_instance.get_google_api_key()
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    app_service = AppService(db_path=":memory:", google_api_key="test_key")
+    logging.debug("Starting health check.")
+    db_connected = app_service_instance.check_database_connection()
+    api_key_present = bool(app_service_instance.google_api_key)
     
-    # Check if the database connection is successful
-    db_connected = app_service.check_database_connection()
-    api_key_present = bool(app_service.google_api_key)
-    
-    # Fetch places and get the count
-    places = app_service.call_google_places_api(latitude=40.7128, longitude=-74.0060)
+    # Example coordinates for health check API call
+    places = app_service_instance.call_google_places_api(latitude=40.7128, longitude=-74.0060)
     nearby_places_count = len(places)
+    logging.debug(f"Health check found {nearby_places_count} places.")
 
+    # Health status response
     if db_connected and nearby_places_count > 0:
+        logging.debug("Health check status: healthy")
         return jsonify({
             "status": "healthy",
             "database": "connected",
@@ -65,14 +66,15 @@ def health_check():
             "nearby_places_count": nearby_places_count
         }), 200
     else:
+        error_message = "Upload check failed" if nearby_places_count == 0 else "Database error"
+        logging.warning(f"Health check status: unhealthy - {error_message}")
         return jsonify({
             "status": "unhealthy",
             "database": "disconnected" if not db_connected else "connected",
             "api_key_present": api_key_present,
-            "error": "Upload check failed" if nearby_places_count == 0 else "Database error"
+            "error": error_message
         }), 500
 
-# app.py
 @app.route('/save-coordinates', methods=['POST'])
 def save_user_coordinates():
     data = request.json
@@ -80,19 +82,36 @@ def save_user_coordinates():
     longitude = data.get('longitude')
     
     if latitude is None or longitude is None:
+        logging.error("Invalid coordinates received in save-coordinates.")
         return jsonify({"error": "Invalid coordinates"}), 400
 
-    # Round and validate
-    latitude = round(float(latitude), 4)
-    longitude = round(float(longitude), 4)
-    
-    if not all(isinstance(c, float) and round(c, 4) == c for c in [latitude, longitude]):
-        return jsonify({"error": "Coordinates must be floats with 4 decimal places"}), 400
+    # Log the received coordinates
+    logging.debug(f"Received coordinates for saving: {latitude}, {longitude}")
 
     # Send coordinates to RabbitMQ
     app_service_instance.send_coordinates(latitude, longitude)
+    logging.info("Coordinates sent to RabbitMQ.")
     return jsonify({"status": "Coordinates sent to RabbitMQ"}), 200
 
 
+@app.route('/get-nearby-places', methods=['POST'])
+def get_nearby_places():
+    data = request.json
+    latitude = data.get('latitude')
+    longitude = data.get('longitude')
+
+    if latitude is None or longitude is None:
+        return jsonify({"error": "Invalid coordinates"}), 400
+
+    # Use the AppService instance to get places
+    places = app_service_instance.call_google_places_api(latitude, longitude)
+    if not places:
+        return jsonify({"error": "No places found"}), 404
+
+    return jsonify({"places": places}), 200
+
+
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
+    logging.debug("Starting Flask application.")
     app.run(debug=True)

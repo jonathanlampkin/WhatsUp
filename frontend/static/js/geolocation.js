@@ -3,19 +3,6 @@
 let map, userMarker, directionsService, directionsRenderer;
 const placesList = document.getElementById('places-list');
 
-// Fetch Google Maps API key and load API
-fetch('/api-key')
-    .then(response => response.json())
-    .then(data => loadGoogleMapsAPI(data.apiKey))
-    .catch(error => console.error('Error fetching API key:', error));
-
-function loadGoogleMapsAPI(apiKey) {
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-    document.head.appendChild(script);
-    script.onload = initMap;
-}
-
 // Initialize Map and User Location
 function initMap() {
     if (navigator.geolocation) {
@@ -40,15 +27,8 @@ function initMap() {
             directionsRenderer = new google.maps.DirectionsRenderer();
             directionsRenderer.setMap(map);
 
-            // Send user coordinates to backend
-            fetch('/save-coordinates', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ latitude: userLocation.lat, longitude: userLocation.lng }),
-            })
-            .then(response => response.json())
-            .then(data => displayNearbyPlaces(data.ranked_places))
-            .catch(error => console.error('Error saving coordinates:', error));
+            // Fetch nearby places and display them
+            fetchNearbyPlaces(userLocation.lat, userLocation.lng);
         }, error => {
             console.error('Geolocation error:', error);
             alert('Geolocation is required to use this feature.');
@@ -56,6 +36,24 @@ function initMap() {
     } else {
         alert("Geolocation is not supported by this browser.");
     }
+}
+
+// Fetch Nearby Places from Backend
+function fetchNearbyPlaces(latitude, longitude) {
+    fetch('/get-nearby-places', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ latitude: latitude, longitude: longitude })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            console.error("Error fetching nearby places:", data.error);
+        } else {
+            displayNearbyPlaces(data.places);
+        }
+    })
+    .catch(error => console.error("Error fetching nearby places:", error));
 }
 
 // Display Ranked Places List and Place Markers
@@ -91,3 +89,6 @@ function highlightPlace(place) {
         }
     });
 }
+
+// Load Google Maps API directly with your proxy setup (assuming the server-side proxy is ready)
+initMap();

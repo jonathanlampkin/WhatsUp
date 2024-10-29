@@ -25,7 +25,25 @@ class AppService:
         self.google_api_key = google_api_key
         self.places = []
         self.results = []
+        self.coords = []
         load_dotenv()
+
+    def process_coordinates(self, coords):
+        """Process each coordinate and fetch, store, and rank places."""
+        self.coords.append(coords)
+
+        while self.coords:
+            latitude, longitude = self.coords.pop(0)
+            if self.check_existing_places(latitude, longitude):
+                self.rank_nearby_places(latitude, longitude)
+            else:
+                # Load Google API key from .env only if required
+                #self.load_google_api_key()
+                self.generate_entry(latitude, longitude)
+                self.call_google_places_api(latitude, longitude)
+                for place in self.places:
+                    self.insert_place_data(latitude, longitude, place)
+                self.rank_nearby_places(latitude, longitude)
 
     def get_rabbitmq_connection(self):
         rabbitmq_url = os.getenv("RABBITMQ_URL")
@@ -44,32 +62,6 @@ class AppService:
         print(f" [x] Sent {message} to RabbitMQ")
         connection.close()
 
-    def receive_coordinates(self, queue_name="coordinates_queue"):
-        connection = self.get_rabbitmq_connection()
-        channel = connection.channel()
-        channel.queue_declare(queue=queue_name)
-
-        def callback(ch, method, properties, body):
-            coords = json.loads(body)
-            latitude = coords['latitude']
-            longitude = coords['longitude']
-            print(f" [x] Received coordinates {latitude}, {longitude}")
-            self.process_coordinates(latitude, longitude)
-
-        channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=True)
-        print(' [*] Waiting for coordinates. To exit press CTRL+C')
-        channel.start_consuming()
-
-    def process_coordinates(self, latitude, longitude):
-        """Process coordinates by checking for existing places and fetching new data if needed."""
-        if self.check_existing_places(latitude, longitude):
-            self.rank_nearby_places(latitude, longitude)
-        else:
-            self.generate_entry(latitude, longitude)
-            self.call_google_places_api(latitude, longitude)
-            for place in self.places:
-                self.insert_place_data(latitude, longitude, place)
-            self.rank_nearby_places(latitude, longitude)
 
     def get_google_api_key(self):
         """Return the Google API key as JSON for frontend use."""
@@ -85,22 +77,7 @@ class AppService:
         except sqlite3.OperationalError:
             return False
 
-    def process_coordinates(self, coords):
-        """Process each coordinate and fetch, store, and rank places."""
-        self.coords.append(coords)
 
-        while self.coords:
-            latitude, longitude = self.coords.pop(0)
-            if self.check_existing_places(latitude, longitude):
-                self.rank_nearby_places(latitude, longitude)
-            else:
-                # Load Google API key from .env only if required
-                #self.load_google_api_key()
-                self.generate_entry(latitude, longitude)
-                self.call_google_places_api(latitude, longitude)
-                for place in self.places:
-                    self.insert_place_data(latitude, longitude, place)
-                self.rank_nearby_places(latitude, longitude)
                 
 
     def check_existing_places(self, latitude, longitude):
@@ -140,7 +117,7 @@ class AppService:
             'location': f"{latitude},{longitude}",
             'radius': radius,
             'type': place_type,
-            'key': self.google_api_key
+            'key': self.google_api_key  # Use the key directly from environment variable
         }
         response = requests.get(url, params=params)
         if response.status_code == 200:
@@ -149,6 +126,7 @@ class AppService:
         else:
             print(f"Error Google Places API Response: {response.status_code} - {response.text}")
         return self.places
+
 
     def insert_place_data(self, latitude, longitude, place):
         """Insert a single place entry into the database."""
