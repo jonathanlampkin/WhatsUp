@@ -100,19 +100,30 @@ def save_user_coordinates():
     # Store coordinates in the database
     visitor_id = app_service_instance.generate_entry(latitude, longitude)
     if visitor_id:
+        logging.debug(f"Coordinates saved: {latitude}, {longitude}")
         return jsonify({"status": "Coordinates sent to RabbitMQ and saved in database"}), 200
     else:
+        logging.error("Failed to save coordinates")
         return jsonify({"error": "Failed to save coordinates"}), 500
+
 
 
 @app.route('/get-all-coordinates', methods=['GET'])
 def get_all_coordinates():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM user_coordinates")
+    cursor.execute("SELECT visitor_id, latitude, longitude, timestamp FROM user_coordinates")
     rows = cursor.fetchall()
     conn.close()
-    return jsonify(rows)
+
+    # Convert rows to JSON format
+    coordinates = [
+        {"visitor_id": row[0], "latitude": row[1], "longitude": row[2], "timestamp": row[3]}
+        for row in rows
+    ]
+    logging.debug(f"Retrieved coordinates: {coordinates}")
+    return jsonify({"coordinates": coordinates})
+
 
 
 @app.route('/get-nearby-places', methods=['POST'])
