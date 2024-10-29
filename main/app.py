@@ -12,6 +12,7 @@ import time
 load_dotenv()
 db_path = os.path.join(os.path.dirname(__file__), '../database/database.db')
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")  # API key for secure access
 
 app = Flask(__name__, 
             template_folder='../frontend/templates', 
@@ -31,7 +32,6 @@ errors_counter = Counter('errors_total', 'Total number of errors')
 
 @app.route('/get-google-maps-key')
 def get_google_maps_key():
-    print("Google Maps Key endpoint accessed")
     if not GOOGLE_API_KEY:
         abort(404)
     return jsonify({"key": GOOGLE_API_KEY})
@@ -42,7 +42,6 @@ def get_google_maps_key():
 def before_request():
     logging.debug("Incrementing request counter.")
     request_counter.inc()
-
 
 @app.after_request
 def after_request(response):
@@ -101,44 +100,62 @@ def save_user_coordinates():
         errors_counter.inc()
         return jsonify({"error": "Invalid coordinates"}), 400
 
-    # Process coordinates
     latitude = round(float(latitude), 4)
     longitude = round(float(longitude), 4)
 
-    # Store coordinates in the database first
     visitor_id = app_service_instance.generate_entry(latitude, longitude)
     if not visitor_id:
         logging.error("Failed to save coordinates in database")
         errors_counter.inc()
         return jsonify({"error": "Failed to save coordinates"}), 500
     
-    # If saving to the database was successful, proceed to send coordinates to RabbitMQ
     app_service_instance.send_coordinates(latitude, longitude)
     logging.debug(f"Coordinates saved and sent to RabbitMQ: {latitude}, {longitude}")
     
-    coordinates_saved_counter.inc()  # Increment coordinates saved counter
-    response_time_histogram.labels(endpoint='/save-coordinates').observe(time.time() - start_time)  # Track response time
+    coordinates_saved_counter.inc()
+    response_time_histogram.labels(endpoint='/save-coordinates').observe(time.time() - start_time)
     
     return jsonify({"status": "Coordinates saved in database and sent to RabbitMQ"}), 200
 
 
 @app.route('/get-all-coordinates', methods=['GET'])
 def get_all_coordinates():
-    start_time = time.time()
+    if request.headers.get('X-API-KEY') != ADMIN_API_KEY:
+        abort(403)
+    
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute("SELECT visitor_id, latitude, longitude, timestamp FROM user_coordinates")
     rows = cursor.fetchall()
     conn.close()
 
-    # Convert rows to JSON format
     coordinates = [
         {"visitor_id": row[0], "latitude": row[1], "longitude": row[2], "timestamp": row[3]}
         for row in rows
     ]
-    logging.debug(f"Retrieved coordinates: {coordinates}")
-    response_time_histogram.labels(endpoint='/get-all-coordinates').observe(time.time() - start_time)
     return jsonify({"coordinates": coordinates})
+
+
+@app.route('/get-all-nearby-places', methods=['GET'])
+def get_all_nearby_places():
+    if request.headers.get('X-API-KEY') != ADMIN_API_KEY:
+        abort(403)
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT latitude, longitude, name, rating, vicinity 
+        FROM google_nearby_places
+        ORDER BY rating DESC
+    ''')
+    rows = cursor.fetchall()
+    conn.close()
+
+    places = [
+        {"latitude": row[0], "longitude": row[1], "name": row[2], "rating": row[3], "vicinity": row[4]}
+        for row in rows
+    ]
+    return jsonify({"nearby_places": places})
 
 
 @app.route('/get-nearby-places', methods=['POST'])
@@ -152,48 +169,18 @@ def get_nearby_places():
         errors_counter.inc()
         return jsonify({"error": "Invalid coordinates"}), 400
 
-    # Use the AppService instance to get places
     places = app_service_instance.call_google_places_api(latitude, longitude)
     if not places:
         return jsonify({"error": "No places found"}), 404
 
-    api_call_counter.inc()  # Increment Google API call counter
+    api_call_counter.inc()
     response_time_histogram.labels(endpoint='/get-nearby-places').observe(time.time() - start_time)
     
     return jsonify({"places": places})
 
 
-@app.route('/get-ranked-places', methods=['POST'])
-def get_ranked_places():
-    start_time = time.time()
-    data = request.json
-    latitude = data.get('latitude')
-    longitude = data.get('longitude')
-
-    if latitude is None or longitude is None:
-        errors_counter.inc()
-        return jsonify({"error": "Invalid coordinates"}), 400
-
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT name, vicinity, rating FROM ranked_nearby_places
-        WHERE latitude = ? AND longitude = ?
-        ORDER BY rating DESC
-    ''', (latitude, longitude))
-    rows = cursor.fetchall()
-    conn.close()
-
-    ranked_places = [
-        {"name": row[0], "vicinity": row[1], "rating": row[2]}
-        for row in rows
-    ]
-    response_time_histogram.labels(endpoint='/get-ranked-places').observe(time.time() - start_time)
-    return jsonify({"ranked_places": ranked_places})
-
-
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     logging.debug("Starting Flask application.")
-    port = int(os.getenv("PORT", 5000))  # Default to 5000 if PORT is not set
+    port = int(os.getenv("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
