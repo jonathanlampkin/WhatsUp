@@ -19,7 +19,7 @@ class TestIntegration(unittest.TestCase):
         response = self.client.post("/save-coordinates", json=data)
         json_data = response.get_json()
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(json_data["status"], "Coordinates sent to RabbitMQ")
+        self.assertEqual(json_data["status"], "Coordinates sent to RabbitMQ and saved in database")
 
     @patch("main.app_service.AppService.call_google_places_api")
     def test_get_nearby_places(self, mock_call_google_places_api):
