@@ -94,17 +94,18 @@ def save_user_coordinates():
     latitude = round(float(latitude), 4)
     longitude = round(float(longitude), 4)
 
-    # Send coordinates to RabbitMQ
-    app_service_instance.send_coordinates(latitude, longitude)
-
-    # Store coordinates in the database
+    # Store coordinates in the database first
     visitor_id = app_service_instance.generate_entry(latitude, longitude)
-    if visitor_id:
-        logging.debug(f"Coordinates saved: {latitude}, {longitude}")
-        return jsonify({"status": "Coordinates sent to RabbitMQ and saved in database"}), 200
-    else:
-        logging.error("Failed to save coordinates")
+    if not visitor_id:
+        logging.error("Failed to save coordinates in database")
         return jsonify({"error": "Failed to save coordinates"}), 500
+    
+    # If saving to the database was successful, proceed to send coordinates to RabbitMQ
+    app_service_instance.send_coordinates(latitude, longitude)
+    logging.debug(f"Coordinates saved and sent to RabbitMQ: {latitude}, {longitude}")
+    
+    return jsonify({"status": "Coordinates saved in database and sent to RabbitMQ"}), 200
+
 
 
 

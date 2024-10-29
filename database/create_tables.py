@@ -8,8 +8,8 @@ conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
 # Drop tables if they already exist for a fresh setup
-cursor.execute('DROP TABLE IF EXISTS user_coordinates')
-cursor.execute('DROP TABLE IF EXISTS google_nearby_places')
+# cursor.execute('DROP TABLE IF EXISTS user_coordinates')
+# cursor.execute('DROP TABLE IF EXISTS google_nearby_places')
 
 # Create user_coordinates table
 cursor.execute('''
