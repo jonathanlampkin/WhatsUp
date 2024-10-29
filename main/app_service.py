@@ -37,7 +37,6 @@ class AppService:
                 self.rank_nearby_places(latitude, longitude)
             else:
                 # Load Google API key from .env only if required
-                #self.load_google_api_key()
                 self.generate_entry(latitude, longitude)
                 self.call_google_places_api(latitude, longitude)
                 for place in self.places:
