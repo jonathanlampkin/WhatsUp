@@ -1,5 +1,3 @@
-// frontend/static/js/geolocation.js
-
 let map, userMarker, directionsService, directionsRenderer;
 const placesList = document.getElementById('places-list');
 
@@ -21,6 +19,7 @@ function initMap() {
                 lng: position.coords.longitude
             };
 
+            // Initialize the map centered at user location
             map = new google.maps.Map(document.getElementById("map"), {
                 center: userLocation,
                 zoom: 15,
@@ -36,6 +35,9 @@ function initMap() {
             directionsRenderer = new google.maps.DirectionsRenderer();
             directionsRenderer.setMap(map);
 
+            // Save the user coordinates in the database
+            saveUserCoordinates(userLocation.lat, userLocation.lng);
+
             // Fetch nearby places and display them
             fetchNearbyPlaces(userLocation.lat, userLocation.lng);
         }, error => {
@@ -45,6 +47,24 @@ function initMap() {
     } else {
         alert("Geolocation is not supported by this browser.");
     }
+}
+
+// Save User Coordinates to the Backend
+function saveUserCoordinates(latitude, longitude) {
+    fetch('/save-coordinates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ latitude: latitude, longitude: longitude })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            console.error("Error saving user coordinates:", data.error);
+        } else {
+            console.log("User coordinates saved successfully.");
+        }
+    })
+    .catch(error => console.error("Error saving user coordinates:", error));
 }
 
 // Fetch Nearby Places from Backend
