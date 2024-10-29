@@ -68,20 +68,14 @@ function fetchNearbyPlaces(latitude, longitude) {
 // Display Ranked Places List and Place Markers
 function displayNearbyPlaces(places) {
     placesList.innerHTML = '';  // Clear previous list
-    places.forEach((place) => {
-        // Ensure the coordinates are valid numbers
-        if (isNaN(place.latitude) || isNaN(place.longitude)) {
-            console.error("Invalid coordinates:", place);
-            return; // Skip this place if coordinates are invalid
-        }
-
+    places.forEach((place, index) => {
         const listItem = document.createElement('li');
         listItem.textContent = `${place.name} - ${place.vicinity} (Rating: ${place.rating})`;
         listItem.onclick = () => highlightPlace(place);
         placesList.appendChild(listItem);
 
         const marker = new google.maps.Marker({
-            position: { lat: parseFloat(place.latitude), lng: parseFloat(place.longitude) },
+            position: { lat: place.latitude, lng: place.longitude },
             map,
             title: place.name,
         });
@@ -89,8 +83,6 @@ function displayNearbyPlaces(places) {
         marker.addListener('click', () => highlightPlace(place));
     });
 }
-
-
 
 // Highlight Place and Show Directions
 function highlightPlace(place) {

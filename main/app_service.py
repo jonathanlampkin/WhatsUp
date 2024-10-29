@@ -93,8 +93,8 @@ class AppService:
                 INSERT INTO user_coordinates (visitor_id, latitude, longitude, timestamp)
                 VALUES (?, ?, ?, ?)
             ''', (visitor_id, latitude, longitude, timestamp))
-            conn.commit()
-            logging.info(f"Inserted coordinates: {latitude}, {longitude} with visitor_id: {visitor_id}")
+            conn.commit()  # Ensure commit
+            logging.info(f"Coordinates saved: {latitude}, {longitude}")
             conn.close()
             return visitor_id
         except sqlite3.DatabaseError as e:
