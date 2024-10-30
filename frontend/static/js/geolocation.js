@@ -87,7 +87,7 @@ function displayNearbyPlaces(places) {
     placesList.innerHTML = '';  // Clear previous list
     places.forEach((place, index) => {
         const listItem = document.createElement('li');
-        listItem.textContent = `${place.name} - ${place.vicinity} (Rating: ${place.rating})`;
+        listItem.textContent = `${place.name} Rating: ${place.rating} Number of Ratings: ${place.user_ratings_total} Price Level: ${place.price_level} Open Now: ${place.open_now}`;
         listItem.onclick = () => highlightPlace(place);
         placesList.appendChild(listItem);
 

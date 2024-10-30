@@ -101,6 +101,9 @@ def process_coordinates():
         errors_counter.inc()
         return jsonify({"error": "Invalid coordinates"}), 400
     
+    latitude = round(latitude, 4)
+    longitude = round(longitude, 4)
+
     app_service_instance.send_coordinates(latitude, longitude)
     coordinates_saved_counter.inc()
     logging.debug(f"Coordinates saved and sent to RabbitMQ: {latitude}, {longitude}")
@@ -195,7 +198,7 @@ def get_all_nearby_places():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT latitude, longitude, name, rating, vicinity 
+        SELECT latitude, longitude, name, rating, user_ratings_total, price_level, open_now
         FROM google_nearby_places
         ORDER BY rating DESC
     ''')
