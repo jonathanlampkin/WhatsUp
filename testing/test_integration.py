@@ -44,16 +44,6 @@ class TestIntegration(unittest.TestCase):
                     open_now BOOLEAN
                 )
             ''')
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS ranked_nearby_places (
-                    latitude REAL,
-                    longitude REAL,
-                    name TEXT,
-                    rating REAL,
-                    user_ratings_total INTEGER,
-                    open_now BOOLEAN
-                )
-            ''')
             conn.commit()
 
     @patch.dict(os.environ, {"RABBITMQ_URL": "amqp://guest:guest@localhost:5672/"})
