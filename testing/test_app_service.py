@@ -1,3 +1,4 @@
+# testing/test_app_service.py
 import unittest
 from unittest.mock import patch, MagicMock
 from main.app_service import AppService
@@ -84,7 +85,6 @@ class TestAppService(unittest.TestCase):
         # Call the method to insert place data
         self.app_service.insert_place_data(40.7128, -74.0060, place)
         mock_cursor.execute.assert_called_once()
-
 
 if __name__ == "__main__":
     unittest.main()

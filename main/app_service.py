@@ -18,22 +18,33 @@ class AppService:
         self.coords = []
         load_dotenv()
 
+# app_service.py
+
     def process_coordinates(self, coords):
-        """Process each coordinate and fetch, store, and rank places."""
-        self.coords.append(coords)
+        """Process each coordinate: store, check, fetch, and rank nearby places."""
+        latitude, longitude = coords
 
-        while self.coords:
-            latitude, longitude = self.coords.pop(0)
-            if not self.check_existing_places(latitude, longitude):
-                # Fetch and store places if not already in the database
-                self.generate_entry(latitude, longitude)
-                self.call_google_places_api(latitude, longitude)
-                for place in self.places:
-                    self.insert_place_data(latitude, longitude, place)
+        # Step 1: Store the coordinates if they are new
+        visitor_id = self.generate_entry(latitude, longitude)
 
-            # Rank and store ranked places for each unique coordinate pair
+        # Step 2: Check if places already exist for these coordinates
+        if self.check_existing_places(latitude, longitude):
+            # Step 3: Retrieve existing places ordered by rating
             ranked_places = self.rank_nearby_places(latitude, longitude)
             self.store_ranked_nearby_places(latitude, longitude, ranked_places)
+        else:
+            # Step 4: Fetch new places from Google API and store in the database
+            self.places = self.call_google_places_api(latitude, longitude)
+            for place in self.places:
+                self.insert_place_data(latitude, longitude, place)
+            
+            # Rank and store places in the ranked_nearby_places table
+            ranked_places = self.rank_nearby_places(latitude, longitude)
+            self.store_ranked_nearby_places(latitude, longitude, ranked_places)
+
+        # Return the places, ordered by rating
+        return self.places
+
 
     def get_rabbitmq_connection(self):
         rabbitmq_url = os.getenv("RABBITMQ_URL")
@@ -91,10 +102,10 @@ class AppService:
             conn.commit()  # Ensure commit
             logging.info(f"Coordinates saved: {latitude}, {longitude}")
             conn.close()
-            return visitor_id
         except sqlite3.DatabaseError as e:
             logging.error(f"Error saving coordinates: {e}")
             return None
+    
 
     def call_google_places_api(self, latitude, longitude, radius=1500, place_type="restaurant"):
         """Call the Google Places API to fetch nearby places."""

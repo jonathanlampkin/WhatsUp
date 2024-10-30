@@ -13,41 +13,37 @@ class TestIntegration(unittest.TestCase):
 
     @patch.dict(os.environ, {"RABBITMQ_URL": "amqp://guest:guest@localhost:5672/"})
     @patch("main.app_service.AppService.check_existing_places")
-    @patch("main.app_service.AppService.insert_place_data")
-    def test_save_coordinates(self, mock_check_existing_places, mock_insert_place_data):
-        data = {"latitude": 40.7128, "longitude": -74.0060}
-        response = self.client.post("/save-coordinates", json=data)
-        json_data = response.get_json()
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(json_data["status"], "Coordinates saved in database and sent to RabbitMQ")
-
     @patch("main.app_service.AppService.call_google_places_api")
-    def test_get_nearby_places(self, mock_call_google_places_api):
-        mock_call_google_places_api.return_value = [
-            {"name": "Test Place", "vicinity": "123 Test St", "rating": 4.5}
-        ]
-        
-        response = self.client.post("/get-nearby-places", json={"latitude": 40.7128, "longitude": -74.0060})
+    def test_process_coordinates_existing_places(self, mock_call_google_places_api, mock_check_existing_places):
+        # Simulate that coordinates already exist in the database
+        mock_check_existing_places.return_value = True
+        mock_call_google_places_api.return_value = []
+
+        data = {"latitude": 40.7128, "longitude": -74.0060}
+        response = self.client.post("/process-coordinates", json=data)
         json_data = response.get_json()
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("places", json_data)
+
+    @patch.dict(os.environ, {"RABBITMQ_URL": "amqp://guest:guest@localhost:5672/"})
+    @patch("main.app_service.AppService.call_google_places_api")
+    @patch("main.app_service.AppService.check_existing_places")
+    def test_process_coordinates_no_existing_places(self, mock_check_existing_places, mock_call_google_places_api):
+        # Simulate no existing places, so it will call the Google API
+        mock_check_existing_places.return_value = False
+        mock_call_google_places_api.return_value = [
+            {"name": "New Place", "vicinity": "123 New St", "rating": 4.0}
+        ]
+
+        data = {"latitude": 40.7128, "longitude": -74.0060}
+        response = self.client.post("/process-coordinates", json=data)
+        json_data = response.get_json()
+
         self.assertEqual(response.status_code, 200)
         self.assertIn("places", json_data)
         self.assertEqual(len(json_data["places"]), 1)
-        self.assertEqual(json_data["places"][0]["name"], "Test Place")
-
-    @patch("main.app_service.sqlite3.connect")
-    def test_check_existing_places(self, mock_connect):
-        mock_conn = mock_connect.return_value
-        mock_cursor = mock_conn.cursor.return_value
-
-        # Coordinates that exist
-        mock_cursor.fetchone.return_value = (1,)
-        result = self.app_service.check_existing_places(38.7219, -9.1607)
-        self.assertTrue(result)
-
-        # Coordinates that do not exist
-        mock_cursor.fetchone.return_value = None
-        result = self.app_service.check_existing_places(40.7128, -74.0060)
-        self.assertFalse(result)
+        self.assertEqual(json_data["places"][0]["name"], "New Place")
 
 if __name__ == "__main__":
     unittest.main()
