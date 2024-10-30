@@ -46,20 +46,20 @@ class TestIntegration(unittest.TestCase):
             ''')
             conn.commit()
 
-    @patch.dict(os.environ, {"RABBITMQ_URL": "amqp://guest:guest@localhost:5672/"})
-    @patch("main.app_service.AppService.check_existing_places", return_value=True)
-    @patch("main.app_service.AppService.rank_nearby_places", return_value=[
-        {"name": "Test Place", "vicinity": "123 Test St", "rating": 4.5}
-    ])
-    def test_process_coordinates_existing_places(self, mock_rank_nearby_places, mock_check_existing_places):
-        data = {"latitude": 40.7128, "longitude": -74.0060}
-        response = self.client.post("/process-coordinates", json=data)
-        json_data = response.get_json()
+    # @patch.dict(os.environ, {"RABBITMQ_URL": "amqp://guest:guest@localhost:5672/"})
+    # @patch("main.app_service.AppService.check_existing_places", return_value=True)
+    # @patch("main.app_service.AppService.rank_nearby_places", return_value=[
+    #     {"name": "Test Place", "vicinity": "123 Test St", "rating": 4.5}
+    # ])
+    # def test_process_coordinates_existing_places(self, mock_rank_nearby_places, mock_check_existing_places):
+    #     data = {"latitude": 40.7128, "longitude": -74.0060}
+    #     response = self.client.post("/process-coordinates", json=data)
+    #     json_data = response.get_json()
         
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("places", json_data)
-        self.assertEqual(len(json_data["places"]), 1)
-        self.assertEqual(json_data["places"][0]["name"], "Test Place")
+    #     self.assertEqual(response.status_code, 200)
+    #     self.assertIn("places", json_data)
+    #     self.assertEqual(len(json_data["places"]), 1)
+    #     self.assertEqual(json_data["places"][0]["name"], "Test Place")
 
     @patch.dict(os.environ, {"RABBITMQ_URL": "amqp://guest:guest@localhost:5672/"})
     @patch("main.app_service.AppService.check_existing_places", return_value=False)

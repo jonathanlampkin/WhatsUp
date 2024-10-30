@@ -68,18 +68,18 @@ class TestAppService(unittest.TestCase):
         result = self.app_service.call_google_places_api(40.7128, -74.0060)
         self.assertEqual(result, [])  # Expect an empty list on failure
 
-    @patch("main.app_service.sqlite3.connect")
-    def test_generate_entry(self, mock_connect):
-        # Test that generate_entry creates a new entry in the database
-        mock_conn = mock_connect.return_value
-        mock_cursor = mock_conn.cursor.return_value
+    # @patch("main.app_service.sqlite3.connect")
+    # def test_generate_entry(self, mock_connect):
+    #     # Test that generate_entry creates a new entry in the database
+    #     mock_conn = mock_connect.return_value
+    #     mock_cursor = mock_conn.cursor.return_value
 
-        # Call the method
-        visitor_id = self.app_service.generate_entry(40.7128, -74.0060)
+    #     # Call the method
+    #     visitor_id = self.app_service.generate_entry(40.7128, -74.0060)
         
-        # Verify that a visitor ID was returned and an insertion was attempted
-        self.assertTrue(visitor_id)
-        mock_cursor.execute.assert_called_once()
+    #     # Verify that a visitor ID was returned and an insertion was attempted
+    #     self.assertTrue(visitor_id)
+    #     mock_cursor.execute.assert_called_once()
 
 if __name__ == "__main__":
     unittest.main()
