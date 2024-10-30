@@ -2,14 +2,57 @@
 import unittest
 from unittest.mock import patch, MagicMock
 from main.app_service import AppService
-from datetime import datetime
-import uuid
+import sqlite3
 
 class TestAppService(unittest.TestCase):
 
     def setUp(self):
         # Set up a test instance of AppService with an in-memory database
         self.app_service = AppService(db_path=":memory:", google_api_key="test_key")
+
+        # Create required tables in the in-memory database
+        with sqlite3.connect(self.app_service.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_coordinates (
+                    visitor_id TEXT PRIMARY KEY,
+                    latitude REAL,
+                    longitude REAL,
+                    timestamp TEXT
+                )
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS google_nearby_places (
+                    latitude REAL,
+                    longitude REAL,
+                    place_id TEXT PRIMARY KEY,
+                    name TEXT,
+                    business_status TEXT,
+                    rating REAL,
+                    user_ratings_total INTEGER,
+                    vicinity TEXT,
+                    types TEXT,
+                    price_level INTEGER,
+                    icon TEXT,
+                    icon_background_color TEXT,
+                    icon_mask_base_uri TEXT,
+                    photo_reference TEXT,
+                    photo_height INTEGER,
+                    photo_width INTEGER,
+                    open_now BOOLEAN
+                )
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS ranked_nearby_places (
+                    latitude REAL,
+                    longitude REAL,
+                    name TEXT,
+                    rating REAL,
+                    user_ratings_total INTEGER,
+                    open_now BOOLEAN
+                )
+            ''')
+            conn.commit()
 
     @patch("main.app_service.requests.get")
     def test_call_google_places_api_success(self, mock_get):
@@ -78,7 +121,6 @@ class TestAppService(unittest.TestCase):
             "icon_background_color": "#FFFFFF",
             "icon_mask_base_uri": "test_mask_url",
             "photos": [{"photo_reference": "ref123", "height": 100, "width": 200}],
-            "plus_code": {"compound_code": "X123", "global_code": "Y123"},
             "opening_hours": {"open_now": True}
         }
 
