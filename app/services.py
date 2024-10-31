@@ -15,7 +15,7 @@ load_dotenv()
 
 # Establish PostgreSQL connection
 def get_db_connection():
-    database_url = os.getenv("DATABASE_URL")
+    database_url = os.getenv("DATABASE_URL") or os.getenv("LOCAL_DATABASE_URL")
     result = urlparse(database_url)
     connection = psycopg2.connect(
         database=result.path[1:],  # Remove leading "/" from the path

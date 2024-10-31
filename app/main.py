@@ -12,7 +12,6 @@ import time
 
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")  # API key for secure access
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 
