@@ -25,7 +25,7 @@ class TestRabbitMQMessaging(unittest.TestCase):
         # Initialize AppService for testing consumer functionality
         db_path = os.path.join(os.path.dirname(__file__), '../database/database.db')
         google_api_key = os.getenv("GOOGLE_API_KEY")
-        self.app_service = AppService(db_path=db_path, google_api_key=google_api_key)
+        self.app_service = AppService(google_api_key=google_api_key)
         
         # Declare the test queue
         self.channel.queue_declare(queue=self.queue_name)

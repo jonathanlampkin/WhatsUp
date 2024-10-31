@@ -23,7 +23,7 @@ class TestIntegration(unittest.TestCase):
 
     @patch("app.services.AppService.call_google_places_api", return_value=200)
     def test_call_google_places_api(self, mock_api_call):
-        status_code, _ = self.app_service.call_google_places_api(MOCK_LATITUDE, MOCK_LONGITUDE)
+        status_code = self.app_service.call_google_places_api(MOCK_LATITUDE, MOCK_LONGITUDE)
         self.assertEqual(status_code, 200, "Google API call did not succeed")
 
     def test_rank_nearby_places(self):
