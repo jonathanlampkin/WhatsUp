@@ -24,14 +24,16 @@ class TestIntegration(unittest.TestCase):
         status_code = self.app_service.call_google_places_api(MOCK_LATITUDE, MOCK_LONGITUDE)
         self.assertEqual(status_code, 200, "Google API call did not succeed")
 
-    def test_rank_nearby_places(self):
-        # Insert mock data for ranking
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        mock_data = [
-            (37.7749, -122.4194, "1", "Place A", "OPERATIONAL", 4.5, 100, "Location A", "['restaurant']", 2, "icon_a", "color_a", "mask_a", "photo_ref_a", 400, 400, True),
-            (37.7749, -122.4194, "2", "Place B", "OPERATIONAL", 4.0, 150, "Location B", "['cafe']", 1, "icon_b", "color_b", "mask_b", "photo_ref_b", 300, 300, False)
-        ]
+def test_rank_nearby_places(self):
+    # Insert mock data for ranking
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    mock_data = [
+        (37.7749, -122.4194, "1", "Place A", "OPERATIONAL", 4.5, 100, "Location A", "['restaurant']", 2, "icon_a", "color_a", "mask_a", "photo_ref_a", 400, 400, True),
+        (37.7749, -122.4194, "2", "Place B", "OPERATIONAL", 4.0, 150, "Location B", "['cafe']", 1, "icon_b", "color_b", "mask_b", "photo_ref_b", 300, 300, False)
+    ]
+
+    try:
         cursor.executemany('''
             INSERT INTO google_nearby_places (
                 latitude, longitude, place_id, name, business_status, rating, 
@@ -42,7 +44,10 @@ class TestIntegration(unittest.TestCase):
             ON CONFLICT (place_id) DO NOTHING
         ''', mock_data)
         conn.commit()
-
+        print("Data insertion successful.")
+    except Exception as e:
+        print("Data insertion failed:", e)
+    finally:
         # Verify data insertion
         cursor.execute("SELECT * FROM google_nearby_places WHERE latitude = %s AND longitude = %s", (37.7749, -122.4194))
         rows = cursor.fetchall()
@@ -50,10 +55,11 @@ class TestIntegration(unittest.TestCase):
         cursor.close()
         conn.close()
 
-        # Run the ranking method
-        ranked_places = self.app_service.rank_nearby_places(37.7749, -122.4194)
-        print("Ranked places:", ranked_places)  # Debugging output for ranked places
-        self.assertEqual(len(ranked_places), 2, "Ranking did not retrieve expected number of places")
+    # Re-run the connection to check ranking retrieval
+    ranked_places = self.app_service.rank_nearby_places(37.7749, -122.4194)
+    print("Ranked places:", ranked_places)  # Debugging output for ranked places
+    self.assertEqual(len(ranked_places), 2, "Ranking did not retrieve expected number of places")
+
 
 if __name__ == "__main__":
     unittest.main()
