@@ -3,7 +3,7 @@
 import os
 import pika
 import json
-from main.app_service import AppService
+from services import AppService
 
 # Setup database path and API key
 db_path = os.path.join(os.path.dirname(__file__), '../database/database.db')

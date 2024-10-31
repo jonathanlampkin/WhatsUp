@@ -122,8 +122,8 @@ class AppService:
             google_places = response.json().get('results', [])
             for place in google_places:
                 self.insert_place_data(latitude, longitude, place)
-            return response.status_code, google_places  # Updated to return both
-        return response.status_code, []  # Return an empty list if API call fails
+            return (response.status_code, google_places) # Updated to return both
+        return (response.status_code, [])  # Return an empty list if API call fails
 
 
     def insert_place_data(self, latitude, longitude, place):
