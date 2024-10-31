@@ -1,9 +1,5 @@
-# Dockerfile
-
+# Use the official Python image from the Docker Hub
 FROM python:3.9-slim
-
-# Install necessary packages
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 # Set environment variables
 ENV PORT=5000
