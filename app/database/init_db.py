@@ -1,10 +1,21 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from urllib.parse import urlparse
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Establish SQLAlchemy engine and session
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db_connection():
-    """Establishes a connection to the database using DATABASE_URL."""
+    """Establish a connection to the database using DATABASE_URL."""
     database_url = os.getenv("DATABASE_URL")
     result = urlparse(database_url)
     connection = psycopg2.connect(

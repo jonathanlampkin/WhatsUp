@@ -118,40 +118,6 @@ def process_coordinates():
     
     return jsonify({"places": places}), 200
 
-
-# @app.route('/get-all-coordinates', methods=['GET'])
-# def get_all_coordinates():
-#     if request.headers.get('ADMIN_API_KEY') != ADMIN_API_KEY:
-#         abort(403)
-    
-#     db = SessionLocal()
-#     coordinates = db.query(UserCoordinates).all()
-#     db.close()
-
-#     result = [
-#         {"visitor_id": coord.visitor_id, "latitude": coord.latitude, "longitude": coord.longitude, "timestamp": coord.timestamp}
-#         for coord in coordinates
-#     ]
-#     return jsonify({"coordinates": result})
-
-
-# @app.route('/get-all-nearby-places', methods=['GET'])
-# def get_all_nearby_places():
-#     if request.headers.get('ADMIN_API_KEY') != ADMIN_API_KEY:
-#         abort(403)
-
-#     db = SessionLocal()
-#     places = db.query(GoogleNearbyPlaces).order_by(GoogleNearbyPlaces.rating.desc()).all()
-#     db.close()
-
-#     result = [
-#         {"latitude": place.latitude, "longitude": place.longitude, "name": place.name, "rating": place.rating, "vicinity": place.vicinity}
-#         for place in places
-#     ]
-#     return jsonify({"nearby_places": result})
-
-
-
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     logging.debug("Starting Flask application.")

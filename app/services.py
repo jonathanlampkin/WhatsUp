@@ -122,11 +122,10 @@ class AppService:
             google_places = response.json().get('results', [])
             for place in google_places:
                 self.insert_place_data(latitude, longitude, place)
-            print(f"Fetched and Stored {len(google_places)} places from Google API")
-            return (response.status_code, google_places)
+            return response.status_code, google_places  # Updated to return both
         else:
-            print(f"Error Google Places API Response: {response.status_code} - {response.text}")
-            return response.status_code
+            return response.status_code, []  # Return an empty list if API call fails
+
 
     def insert_place_data(self, latitude, longitude, place):
         """Insert a single place entry into the database."""

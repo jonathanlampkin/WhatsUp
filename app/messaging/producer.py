@@ -1,4 +1,3 @@
-# messaging/producer.py
 import os
 import pika
 import json
