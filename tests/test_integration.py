@@ -1,5 +1,3 @@
-# tests/test_integration.py
-
 import os
 import unittest
 from unittest.mock import patch
@@ -44,12 +42,18 @@ class TestIntegration(unittest.TestCase):
             ON CONFLICT (place_id) DO NOTHING
         ''', mock_data)
         conn.commit()
+
+        # Verify data insertion
+        cursor.execute("SELECT * FROM google_nearby_places WHERE latitude = %s AND longitude = %s", (37.7749, -122.4194))
+        rows = cursor.fetchall()
+        print("Inserted rows:", rows)  # Debugging output to verify data insertion
         cursor.close()
         conn.close()
 
+        # Run the ranking method
         ranked_places = self.app_service.rank_nearby_places(37.7749, -122.4194)
+        print("Ranked places:", ranked_places)  # Debugging output for ranked places
         self.assertEqual(len(ranked_places), 2, "Ranking did not retrieve expected number of places")
-
 
 if __name__ == "__main__":
     unittest.main()
