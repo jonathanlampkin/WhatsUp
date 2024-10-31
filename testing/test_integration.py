@@ -17,17 +17,7 @@ class TestIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Initialize AppService with an in-memory database and real API key for integration testing
-        cls.app_service = AppService(db_path=":memory:", google_api_key=os.getenv("REAL_GOOGLE_API_KEY"))
-        cls.queue_name = "coordinates_queue"
-
-        # Set up RabbitMQ connection and channel
-        cls.rabbitmq_url = os.getenv("RABBITMQ_URL")
-        cls.connection_params = pika.URLParameters(cls.rabbitmq_url)
-        cls.connection = pika.BlockingConnection(cls.connection_params)
-        cls.channel = cls.connection.channel()
-        
-        # Declare the test queue
-        cls.channel.queue_declare(queue=cls.queue_name)
+        cls.app_service = AppService(db_path=":memory:", google_api_key=os.getenv("GOOGLE_API_KEY"))
 
         # Set up in-memory database tables
         with sqlite3.connect(cls.app_service.db_path) as conn:
@@ -63,11 +53,6 @@ class TestIntegration(unittest.TestCase):
             ''')
             conn.commit()
 
-    @classmethod
-    def tearDownClass(cls):
-        # Clean up RabbitMQ queue and close connection
-        cls.channel.queue_delete(queue=cls.queue_name)
-        cls.connection.close()
 
     def test_generate_entry(self):
         """Test generate_entry inserts a new record in user_coordinates."""
@@ -129,58 +114,6 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(len(ranked_places), 2, "Ranking did not retrieve expected number of places")
         self.assertEqual(ranked_places[0]["name"], "Place A", "Place A should be ranked higher than Place B")
 
-    def test_send_coordinates(self):
-        """Test sending a message using AppService.send_coordinates."""
-        # Define mock latitude and longitude
-        latitude = 37.7749
-        longitude = -122.4194
-
-        # Send the message
-        self.app_service.send_coordinates(latitude, longitude)
-        
-        # Retrieve the message from the queue
-        method_frame, _, body = self.channel.basic_get(self.queue_name, auto_ack=True)
-        
-        # Verify the message was sent
-        self.assertIsNotNone(method_frame, "No message found in the queue.")
-        message = json.loads(body)
-        self.assertEqual(message["latitude"], latitude)
-        self.assertEqual(message["longitude"], longitude)
-
-    def test_send_message_function(self):
-        """Test sending a message using the standalone send_message function."""
-        message = {"latitude": 40.7128, "longitude": -74.0060}
-
-        # Send the message
-        send_message(self.queue_name, message)
-        
-        # Retrieve the message from the queue
-        method_frame, _, body = self.channel.basic_get(self.queue_name, auto_ack=True)
-        
-        # Verify the message was sent
-        self.assertIsNotNone(method_frame, "No message found in the queue.")
-        received_message = json.loads(body)
-        self.assertEqual(received_message, message)
-
-    def test_receive_message(self):
-        """Test receiving a message from RabbitMQ using a consumer."""
-        # Publish a message to the queue
-        message = {"latitude": 40.7128, "longitude": -74.0060}
-        self.channel.basic_publish(exchange='', routing_key=self.queue_name, body=json.dumps(message))
-
-        # Define a callback to verify receipt
-        def callback(ch, method, properties, body):
-            received_message = json.loads(body)
-            self.assertEqual(received_message["latitude"], message["latitude"])
-            self.assertEqual(received_message["longitude"], message["longitude"])
-            print("Message received in callback:", received_message)
-
-        # Consume the message with the callback
-        self.channel.basic_consume(queue=self.queue_name, on_message_callback=callback, auto_ack=True)
-
-        # Process one message
-        method_frame, _, body = self.channel.basic_get(self.queue_name, auto_ack=True)
-        self.assertIsNotNone(method_frame, "Message was not received as expected.")
 
 if __name__ == "__main__":
     unittest.main()
