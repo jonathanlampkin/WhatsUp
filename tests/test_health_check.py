@@ -12,8 +12,7 @@ class TestHealthCheck(unittest.TestCase):
 
     @patch.dict(os.environ, {"GOOGLE_API_KEY": "dummy_key"})
     @patch("app.services.AppService.check_database_connection", return_value=True)
-    @patch("app.services.AppService.call_google_places_api", return_value=[{'name': 'Place1'}])
-    def test_health_check_healthy(self, mock_db, mock_places):
+    def test_health_check_healthy(self, mock_db):
         response = self.client.get("/health")
         json_data = response.get_json()
         self.assertEqual(response.status_code, 200)
@@ -21,8 +20,7 @@ class TestHealthCheck(unittest.TestCase):
         self.assertEqual(json_data["status"], "healthy")
 
     @patch("app.services.AppService.check_database_connection", return_value=False)
-    @patch("app.services.AppService.call_google_places_api", return_value=[])
-    def test_health_check_unhealthy_database(self, mock_check_db, mock_call_google_places_api):
+    def test_health_check_unhealthy_database(self, mock_check_db):
         response = self.client.get("/health")
         json_data = response.get_json()
         self.assertEqual(response.status_code, 500)

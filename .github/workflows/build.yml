@@ -56,7 +56,13 @@ jobs:
         run: |
           until curl -I http://localhost:15672 2>&1 | grep -q '200 OK'; do echo "Waiting for RabbitMQ..."; sleep 5; done
           until pg_isready -h localhost -p 5432 -U test_user; do echo "Waiting for PostgreSQL..."; sleep 5; done
-        timeout-minutes: 2
+        timeout-minutes: 5
+
+      - name: Initialize the Database
+        env:
+          DATABASE_URL: "postgresql://test_user:test_password@localhost:5432/test_db"
+        run: |
+          python app/database/init_db.py
 
       - name: Run unit tests
         env:
@@ -91,5 +97,3 @@ jobs:
         run: heroku container:release web --app ${{ secrets.HEROKU_APP_NAME }}
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
-
-     
