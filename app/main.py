@@ -10,7 +10,6 @@ from prometheus_client import Counter, Histogram, generate_latest
 import logging
 import time
 
-# Load environment variables
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")  # API key for secure access
