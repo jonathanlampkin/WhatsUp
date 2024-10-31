@@ -121,57 +121,6 @@ def process_coordinates():
     return jsonify({"places": places}), 200
 
 
-# @app.route('/save-coordinates', methods=['POST'])
-# def save_user_coordinates():
-#     start_time = time.time()
-#     data = request.json
-#     latitude = data.get('latitude')
-#     longitude = data.get('longitude')
-
-#     if latitude is None or longitude is None:
-#         errors_counter.inc()
-#         return jsonify({"error": "Invalid coordinates"}), 400
-
-#     latitude = round(float(latitude), 4)
-#     longitude = round(float(longitude), 4)
-
-#     visitor_id = app_service_instance.generate_entry(latitude, longitude)
-#     if not visitor_id:
-#         logging.error("Failed to save coordinates in database")
-#         errors_counter.inc()
-#         return jsonify({"error": "Failed to save coordinates"}), 500
-    
-#     app_service_instance.send_coordinates(latitude, longitude)
-#     logging.debug(f"Coordinates saved and sent to RabbitMQ: {latitude}, {longitude}")
-    
-#     coordinates_saved_counter.inc()
-#     response_time_histogram.labels(endpoint='/save-coordinates').observe(time.time() - start_time)
-    
-#     return jsonify({"status": "Coordinates saved in database and sent to RabbitMQ"}), 200
-
-# @app.route('/get-nearby-places', methods=['POST'])
-# def get_nearby_places():
-#     start_time = time.time()
-#     data = request.json
-#     latitude = data.get('latitude')
-#     longitude = data.get('longitude')
-
-#     if latitude is None or longitude is None:
-#         errors_counter.inc()
-#         return jsonify({"error": "Invalid coordinates"}), 400
-
-#     # replace this with the call for your pipeline which eventually returns self.places from appservice class
-#     # at this point, user coords are already saved, just need to get nearby places 
-#     # first check existing and return that, otherwise api call
-#     places = app_service_instance.call_google_places_api(latitude, longitude)
-#     if not places:
-#         return jsonify({"error": "No places found"}), 404
-
-#     api_call_counter.inc()
-#     response_time_histogram.labels(endpoint='/get-nearby-places').observe(time.time() - start_time)
-    
-#     return jsonify({"places": places})
-
 @app.route('/get-all-coordinates', methods=['GET'])
 def get_all_coordinates():
     if request.headers.get('ADMIN_API_KEY') != ADMIN_API_KEY:

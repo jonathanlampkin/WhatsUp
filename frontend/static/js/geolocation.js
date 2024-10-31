@@ -46,23 +46,6 @@ function initMap() {
     }
 }
 
-// Save User Coordinates to the Backend
-// function saveUserCoordinates(latitude, longitude) {
-//     fetch('/save-coordinates', {
-//         method: 'POST',
-//         headers: { 'Content-Type': 'application/json' },
-//         body: JSON.stringify({ latitude: latitude, longitude: longitude })
-//     })
-//     .then(response => response.json())
-//     .then(data => {
-//         if (data.error) {
-//             console.error("Error saving user coordinates:", data.error);
-//         } else {
-//             console.log("User coordinates saved successfully.");
-//         }
-//     })
-//     .catch(error => console.error("Error saving user coordinates:", error));
-// }
 
 // Fetch Nearby Places from Backend
 function fetchNearbyPlaces(latitude, longitude) {
@@ -101,20 +84,6 @@ function displayNearbyPlaces(places) {
     });
 }
 
-// Highlight Place and Show Directions
-function highlightPlace(place) {
-    directionsService.route({
-        origin: userMarker.getPosition(),
-        destination: { lat: place.latitude, lng: place.longitude },
-        travelMode: google.maps.TravelMode.DRIVING,
-    }, (response, status) => {
-        if (status === google.maps.DirectionsStatus.OK) {
-            directionsRenderer.setDirections(response);
-        } else {
-            alert("Directions request failed due to " + status);
-        }
-    });
-}
 
 // Fetch the Google Maps API key, cache it in localStorage, and load the map
 function fetchAndCacheGoogleMapsApiKey() {

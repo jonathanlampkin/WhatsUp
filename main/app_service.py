@@ -17,24 +17,17 @@ class AppService:
         self.results = []
         self.coords = []
         load_dotenv()
-
-# app_service.py
-
+        
     def process_coordinates(self, coords):
         """Process each coordinate: store, check, fetch, and rank nearby places."""
         latitude, longitude = coords
 
-        # Step 1: Store the coordinates if they are new
         visitor_id = self.generate_entry(latitude, longitude)
-
-        # Step 2: Check if places already exist for these coordinates
         if self.check_existing_places(latitude, longitude):
             self.rank_nearby_places(latitude, longitude)
         else:
             self.call_google_places_api(latitude, longitude)
             self.rank_nearby_places(latitude, longitude)
-            
-        # Return the places, ordered by rating
         return self.places
 
 
@@ -107,18 +100,18 @@ class AppService:
             'location': f"{latitude},{longitude}",
             'radius': radius,
             'type': place_type,
-            'key': self.google_api_key  # Use the key directly from environment variable
+            'key': self.google_api_key
         }
         response = requests.get(url, params=params)
         if response.status_code == 200:
-            # call store function which stores the data
-            # then in pipeline, if existing, it just has to rank, not also store -> faster results
             google_places = response.json().get('results', [])
             for place in google_places:
                 self.insert_place_data(place)
             print(f"Fetched and Stored {len(google_places)} places from Google API")
+            return (response.status_code, google_places)
         else:
             print(f"Error Google Places API Response: {response.status_code} - {response.text}")
+            return response.status_code
 
     def insert_place_data(self, latitude, longitude, place):
         """Insert a single place entry into the database."""
@@ -184,23 +177,3 @@ class AppService:
             logging.error(f"Database error: {e}")
             self.places = []
             return self.places
-
-    # def store_ranked_nearby_places(self, latitude, longitude, ranked_places):
-    #     """Store ranked nearby places for each unique coordinates pair."""
-    #     conn = sqlite3.connect(self.db_path)
-    #     cursor = conn.cursor()
-
-    #     for place in ranked_places:
-    #         try:
-    #             cursor.execute('''
-    #                 INSERT OR IGNORE INTO ranked_nearby_places (
-    #                     latitude, longitude, name, rating, user_ratings_total, open_now
-    #                 ) VALUES (?, ?, ?, ?, ?, ?)
-    #             ''', (latitude, longitude, place['name'], place['rating'], place['user_ratings_total'], place['open_now']))
-    #         except sqlite3.DatabaseError as e:
-    #             logging.error(f"Error saving ranked nearby place: {e}")
-
-    #     conn.commit()
-    #     conn.close()
-    #     logging.info(f"Nearby Places for coordinates: latitude:{latitude}, longitude:{longitude} stored in database.")
-    #     self.places = ranked_places
