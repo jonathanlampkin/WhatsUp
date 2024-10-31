@@ -4,7 +4,7 @@ from flask import Flask, request, render_template, jsonify, Response, abort
 import os
 from dotenv import load_dotenv
 from app.services import AppService
-from app.database import SessionLocal
+from app.database.init_db import SessionLocal
 from app.models import UserCoordinates, GoogleNearbyPlaces
 from prometheus_client import Counter, Histogram, generate_latest
 import logging

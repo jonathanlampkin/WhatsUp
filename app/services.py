@@ -123,8 +123,7 @@ class AppService:
             for place in google_places:
                 self.insert_place_data(latitude, longitude, place)
             return response.status_code, google_places  # Updated to return both
-        else:
-            return response.status_code, []  # Return an empty list if API call fails
+        return response.status_code, []  # Return an empty list if API call fails
 
 
     def insert_place_data(self, latitude, longitude, place):

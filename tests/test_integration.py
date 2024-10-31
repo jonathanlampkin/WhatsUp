@@ -27,19 +27,29 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(status_code, 200, "Google API call did not succeed")
 
     def test_rank_nearby_places(self):
-        # Insert mock data to test ranking
+        # Insert mock data for ranking
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO google_nearby_places (latitude, longitude, place_id, name, rating)
-            VALUES (%s, %s, '1', 'Place A', 4.5), (%s, %s, '2', 'Place B', 4.0)
+        mock_data = [
+            (37.7749, -122.4194, "1", "Place A", "OPERATIONAL", 4.5, 100, "Location A", "['restaurant']", 2, "icon_a", "color_a", "mask_a", "photo_ref_a", 400, 400, True),
+            (37.7749, -122.4194, "2", "Place B", "OPERATIONAL", 4.0, 150, "Location B", "['cafe']", 1, "icon_b", "color_b", "mask_b", "photo_ref_b", 300, 300, False)
+        ]
+        cursor.executemany('''
+            INSERT INTO google_nearby_places (
+                latitude, longitude, place_id, name, business_status, rating, 
+                user_ratings_total, vicinity, types, price_level, icon, 
+                icon_background_color, icon_mask_base_uri, photo_reference, 
+                photo_height, photo_width, open_now
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (place_id) DO NOTHING
-        ''', (MOCK_LATITUDE, MOCK_LONGITUDE, MOCK_LATITUDE, MOCK_LONGITUDE))
+        ''', mock_data)
         conn.commit()
+        cursor.close()
         conn.close()
 
-        ranked_places = self.app_service.rank_nearby_places(MOCK_LATITUDE, MOCK_LONGITUDE)
+        ranked_places = self.app_service.rank_nearby_places(37.7749, -122.4194)
         self.assertEqual(len(ranked_places), 2, "Ranking did not retrieve expected number of places")
+
 
 if __name__ == "__main__":
     unittest.main()
