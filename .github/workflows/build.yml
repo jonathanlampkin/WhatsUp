@@ -16,6 +16,19 @@ jobs:
         ports:
           - 5672:5672
           - 15672:15672
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U test_user" 
+          --health-interval=10s 
+          --health-timeout=5s 
+          --health-retries=5
 
     steps:
       - name: Check out the code
@@ -39,17 +52,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Wait for RabbitMQ to be ready
+      - name: Wait for RabbitMQ and PostgreSQL to be ready
         run: |
           until curl -I http://localhost:15672 2>&1 | grep -q '200 OK'; do echo "Waiting for RabbitMQ..."; sleep 5; done
+          until pg_isready -h localhost -p 5432 -U test_user; do echo "Waiting for PostgreSQL..."; sleep 5; done
         timeout-minutes: 2
 
       - name: Run unit tests
         env:
+          DATABASE_URL: "postgresql://test_user:test_password@localhost:5432/test_db"
           RABBITMQ_URL: "amqp://guest:guest@localhost:5672/"
           GOOGLE_API_KEY: "dummy_key"
         run: |
-          python -m unittest discover -s testing
+          python -m unittest discover -s tests
 
   deploy:
     runs-on: ubuntu-latest
@@ -77,7 +92,4 @@ jobs:
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
 
-      - name: Check Heroku Deployment
-        run: heroku apps:info --app ${{ secrets.HEROKU_APP_NAME }}
-        env:
-          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+     

@@ -1,5 +1,13 @@
-# Use the official Python image from the Docker Hub
+# Dockerfile
+
 FROM python:3.9-slim
+
+# Install necessary packages
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Set environment variables
+ENV PORT=5000
+ENV PYTHONUNBUFFERED=1
 
 # Set the working directory in the container
 WORKDIR /app
@@ -13,8 +21,12 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 # Copy the rest of the application code into the container
 COPY . /app
 
-# Expose the port the app runs on (make sure it matches the port your app uses)
-EXPOSE 5000
+# Expose the port (default to 5000 if PORT environment variable isn't set)
+EXPOSE $PORT
 
-# Define the command to run your app using gunicorn and use the environment variable $PORT
-CMD ["gunicorn", "main.app:app", "--bind", "0.0.0.0:${PORT:-5000}"]
+# Health check to ensure the container is up and running
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD curl -f http://localhost:$PORT/health || exit 1
+
+# Run the app using gunicorn and bind it to the specified PORT
+CMD ["gunicorn", "app.main:app", "--bind", "0.0.0.0:${PORT}"]

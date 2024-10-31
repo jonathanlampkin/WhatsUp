@@ -7,32 +7,46 @@ services:
       - "5000:5000"
     depends_on:
       - rabbitmq
+      - db
     environment:
+      - DATABASE_URL=${DATABASE_URL}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - RABBITMQ_URL=${RABBITMQ_URL}
+
+  db:
+    image: postgres:latest
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
 
   rabbitmq:
     image: rabbitmq:3-management
     ports:
       - "5672:5672"
-      - "15672:15672"  # Management console
+      - "15672:15672"
 
   prometheus:
     image: prom/prometheus
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml  # Config file
-      - ./data/prometheus:/prometheus                    # Persistent data storage
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./data/prometheus:/prometheus
     ports:
       - "9090:9090"
 
   grafana:
     image: grafana/grafana
     volumes:
-      - grafana_data:/var/lib/grafana                   # Persistent data for Grafana dashboards
+      - grafana_data:/var/lib/grafana
     ports:
       - "3000:3000"
     depends_on:
       - prometheus
 
 volumes:
-  grafana_data:                                          # Define the Grafana volume outside of services
+  pgdata:
+  grafana_data:
