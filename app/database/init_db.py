@@ -30,6 +30,8 @@ def get_db_connection():
 
 def init_db():
     """Initialize tables in the database if they do not exist."""
+    connection = None
+    cursor = None
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -73,8 +75,10 @@ def init_db():
     except psycopg2.DatabaseError as error:
         print(f"Database initialization failed: {error}")
     finally:
-        cursor.close()
-        connection.close()
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
 
 if __name__ == "__main__":
     init_db()

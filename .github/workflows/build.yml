@@ -66,7 +66,8 @@ jobs:
 
       - name: Initialize the Database
         env:
-          DATABASE_URL: "postgresql://postgres@localhost:5432/test_db"
+          DATABASE_URL: "postgresql://postgres:your_password@localhost:5432/test_db"
+
         run: |
           python app/database/init_db.py
 
