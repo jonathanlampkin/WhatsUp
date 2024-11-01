@@ -182,5 +182,5 @@ class AppService:
         except DatabaseError as e:
             logging.error(f"Database error: {e}")
             self.places = []
-            return self.places`
+            return self.places
 
