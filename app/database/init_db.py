@@ -1,6 +1,5 @@
 import os
 import psycopg2
-from psycopg2 import connect, DatabaseError
 from psycopg2.extras import RealDictCursor
 from urllib.parse import urlparse
 from dotenv import load_dotenv
@@ -8,33 +7,34 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")  # Single variable handling both cases
-
-# Replace "postgres://" with "postgresql://" for compatibility
+DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 def get_db_connection():
-    """Establish a connection to the database using DATABASE_URL."""
+    """Get a connection to the database."""
     if not DATABASE_URL:
         raise ValueError("DATABASE_URL is not set.")
+    
+    print(f"Using DATABASE_URL: {DATABASE_URL}")
+    
     result = urlparse(DATABASE_URL)
-    connection = connect(
-        dbname=result.path[1:],
+    connection = psycopg2.connect(
+        dbname=result.path[1:],  # Remove leading "/" from the path
         user=result.username,
         password=result.password,
-        host=result.hostname,
-        port=result.port,
+        host=result.hostname or "localhost",
+        port=result.port or 5432,
         cursor_factory=RealDictCursor
     )
     return connection
-
 
 def init_db():
     """Initialize tables in the database if they do not exist."""
     connection = None
     cursor = None
     try:
+        print(f"Initializing database with DATABASE_URL: {DATABASE_URL}")
         connection = get_db_connection()
         cursor = connection.cursor()
         
