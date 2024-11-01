@@ -90,11 +90,15 @@ class AppService:
                     ON CONFLICT (visitor_id) DO NOTHING
                 ''', (visitor_id, latitude, longitude, timestamp))
                 conn.commit()
-                logging.info(f"Coordinates saved: {latitude}, {longitude}")
-                return True
+                # Debugging: Verify insertion
+                cursor.execute("SELECT * FROM user_coordinates WHERE visitor_id = %s", (visitor_id,))
+                inserted_entry = cursor.fetchone()
+                logging.debug(f"Inserted entry: {inserted_entry}")
+                return inserted_entry is not None
         except DatabaseError as e:
             logging.error(f"Error saving coordinates: {e}")
             return False
+
 
     def call_google_places_api(self, latitude, longitude, radius=1500, place_type="restaurant"):
         url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
@@ -163,13 +167,15 @@ class AppService:
                 '''
                 cursor.execute(query, (latitude, longitude, latitude, longitude))
                 results = cursor.fetchall()
+                # Debugging: Print the retrieved places
+                logging.debug(f"Retrieved ranked places: {results}")
                 self.places = [
                     {"name": row["name"], "rating": row["rating"], "user_ratings_total": row["user_ratings_total"], "price_level": row["price_level"], "open_now": row["open_now"]}
                     for row in results
                 ]
-                logging.debug(f"Ranked places: {self.places}")
                 return self.places
         except DatabaseError as e:
             logging.error(f"Database error: {e}")
             self.places = []
             return self.places
+
