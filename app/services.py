@@ -2,24 +2,16 @@ import os
 import requests
 import json
 import uuid
-from datetime import datetime
 import logging
 import pika  # RabbitMQ
+from datetime import datetime
 from psycopg2 import DatabaseError
-from psycopg2.extras import RealDictCursor
-from dotenv import load_dotenv
-from flask import jsonify
-from urllib.parse import urlparse
 from app.database.init_db import get_db_connection
-
-load_dotenv()
 
 class AppService:
     def __init__(self, google_api_key=None):
         self.google_api_key = google_api_key
         self.places = []
-        self.results = []
-        self.coords = []
 
     def process_coordinates(self, coords):
         latitude, longitude = coords
@@ -45,9 +37,6 @@ class AppService:
         channel.basic_publish(exchange='', routing_key=queue_name, body=message)
         logging.info(f"[x] Sent {message} to RabbitMQ")
         connection.close()
-
-    def get_google_api_key(self):
-        return jsonify({"apiKey": self.google_api_key})
 
     def check_database_connection(self):
         try:
@@ -159,7 +148,7 @@ class AppService:
             results = cursor.fetchall()
             conn.close()
             self.places = [
-                {"name": row["name"], "rating": row["rating"], "user_ratings_total": row["user_ratings_total"], "price_level": row["price_level"], "open_now": row["open_now"]}
+                {"name": row[0], "rating": row[1], "user_ratings_total": row[2], "price_level": row[3], "open_now": row[4]}
                 for row in results
             ]
             logging.debug(f"Ranked places: {self.places}")
