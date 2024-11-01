@@ -1,5 +1,3 @@
-# test_queries_function.py
-
 import logging
 import unittest
 import os
@@ -14,15 +12,15 @@ class TestDatabaseAndIntegration(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        # Check if TEST_DATABASE_URL is available
-        test_db_url = os.getenv("TEST_DATABASE_URL")
-        if not test_db_url:
-            raise EnvironmentError("TEST_DATABASE_URL is not set in environment variables.")
+        # Use DATABASE_URL directly for both production and testing
+        db_url = os.getenv("DATABASE_URL")
+        if not db_url:
+            raise EnvironmentError("DATABASE_URL is not set in environment variables.")
         
         # Initialize the database in testing mode
         init_db()
 
-        # Establish a connection using the testing database URL
+        # Establish a connection using DATABASE_URL
         cls.connection = get_db_connection()
         cls.app_service = AppService(google_api_key=os.getenv("GOOGLE_API_KEY"))
 
@@ -82,18 +80,16 @@ class TestDatabaseAndIntegration(unittest.TestCase):
     # Integration-specific tests
     def test_generate_entry(self):
         # Insert a user coordinate entry, ensuring it does not conflict with previous tests
-        result = self.app_service.generate_entry(MOCK_LATITUDE, MOCK_LONGITUDE, testing=True)
+        result = self.app_service.generate_entry(MOCK_LATITUDE, MOCK_LONGITUDE)
         self.assertTrue(result, "Failed to insert entry into user_coordinates")
 
         # Use a new connection to verify the entry exists in the database
         with self.connection.cursor() as cursor:
             cursor.execute("SELECT * FROM user_coordinates WHERE latitude = %s AND longitude = %s;", 
-                        (MOCK_LATITUDE, MOCK_LONGITUDE))
+                           (MOCK_LATITUDE, MOCK_LONGITUDE))
             result = cursor.fetchone()
             logging.debug(f"Verified entry in user_coordinates: {result}")
             self.assertIsNotNone(result, "No entry found in user_coordinates table for test coordinates")
-
-
 
     def test_rank_nearby_places(self):
         # Insert mock data for ranking test with unique place IDs to avoid conflicts
@@ -117,12 +113,12 @@ class TestDatabaseAndIntegration(unittest.TestCase):
         # Debug: Confirm data in google_nearby_places after insertion
         with self.connection.cursor() as cursor:
             cursor.execute("SELECT * FROM google_nearby_places WHERE latitude = %s AND longitude = %s", 
-                        (MOCK_LATITUDE, MOCK_LONGITUDE))
+                           (MOCK_LATITUDE, MOCK_LONGITUDE))
             inserted_data = cursor.fetchall()
             logging.debug(f"Inserted data for ranking test in google_nearby_places: {inserted_data}")
 
         # Check if ranking works as expected
-        ranked_places = self.app_service.rank_nearby_places(MOCK_LATITUDE, MOCK_LONGITUDE, testing=True)
+        ranked_places = self.app_service.rank_nearby_places(MOCK_LATITUDE, MOCK_LONGITUDE)
         self.assertEqual(len(ranked_places), 3, "Ranking did not retrieve expected number of places")
 
         # Assert that the place with the highest rating (5.0) is ranked first
