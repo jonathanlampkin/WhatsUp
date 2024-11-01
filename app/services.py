@@ -90,7 +90,8 @@ class AppService:
                     ON CONFLICT (visitor_id) DO NOTHING
                 ''', (visitor_id, latitude, longitude, timestamp))
                 conn.commit()
-                # Debugging: Verify insertion
+                
+                # Debug: Verify insertion by fetching the row just inserted
                 cursor.execute("SELECT * FROM user_coordinates WHERE visitor_id = %s", (visitor_id,))
                 inserted_entry = cursor.fetchone()
                 logging.debug(f"Inserted entry: {inserted_entry}")
@@ -98,6 +99,7 @@ class AppService:
         except DatabaseError as e:
             logging.error(f"Error saving coordinates: {e}")
             return False
+
 
 
     def call_google_places_api(self, latitude, longitude, radius=1500, place_type="restaurant"):

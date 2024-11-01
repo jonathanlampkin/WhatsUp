@@ -1,5 +1,6 @@
 # test_queries_function.py
 
+import logging
 import unittest
 import os
 from app.database.init_db import init_db, get_db_connection
@@ -88,7 +89,9 @@ class TestDatabaseAndIntegration(unittest.TestCase):
         self.cursor.execute("SELECT * FROM user_coordinates WHERE latitude = %s AND longitude = %s;", 
                             (MOCK_LATITUDE, MOCK_LONGITUDE))
         result = self.cursor.fetchone()
+        logging.debug(f"Retrieved entry for verification: {result}")
         self.assertIsNotNone(result, "No entry found in user_coordinates table for test coordinates")
+
 
     def test_rank_nearby_places(self):
         # Insert mock data for ranking test with unique place IDs to avoid conflicts
@@ -108,6 +111,12 @@ class TestDatabaseAndIntegration(unittest.TestCase):
             ON CONFLICT (place_id) DO NOTHING
         ''', mock_data)
         self.connection.commit()
+
+        # Debug: Confirm data in google_nearby_places after insertion
+        self.cursor.execute("SELECT * FROM google_nearby_places WHERE latitude = %s AND longitude = %s", 
+                            (MOCK_LATITUDE, MOCK_LONGITUDE))
+        inserted_data = self.cursor.fetchall()
+        logging.debug(f"Inserted data for ranking test: {inserted_data}")
 
         # Check if ranking works as expected
         ranked_places = self.app_service.rank_nearby_places(MOCK_LATITUDE, MOCK_LONGITUDE, testing=True)
