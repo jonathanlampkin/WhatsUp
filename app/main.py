@@ -1,10 +1,7 @@
-# app/main.py
-
 from flask import Flask, request, render_template, jsonify, Response, abort
 import os
 from dotenv import load_dotenv
 from app.services import AppService
-from app.database.init_db import get_db_connection
 from prometheus_client import Counter, Histogram, generate_latest
 import logging
 import time

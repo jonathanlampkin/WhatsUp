@@ -6,8 +6,10 @@ from datetime import datetime
 import logging
 import pika  # RabbitMQ
 from psycopg2 import DatabaseError
+from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 from flask import jsonify
+from urllib.parse import urlparse
 from app.database.init_db import get_db_connection
 
 load_dotenv()
@@ -20,9 +22,7 @@ class AppService:
         self.coords = []
 
     def process_coordinates(self, coords):
-        """Process each coordinate: store, check, fetch, and rank nearby places."""
         latitude, longitude = coords
-
         visitor_id = self.generate_entry(latitude, longitude)
         if self.check_existing_places(latitude, longitude):
             self.rank_nearby_places(latitude, longitude)
@@ -41,19 +41,15 @@ class AppService:
         channel = connection.channel()
         queue_name = "coordinates_queue"
         channel.queue_declare(queue=queue_name)
-
-        # Publish the coordinates as a message
         message = json.dumps({"latitude": latitude, "longitude": longitude})
         channel.basic_publish(exchange='', routing_key=queue_name, body=message)
         logging.info(f"[x] Sent {message} to RabbitMQ")
         connection.close()
 
     def get_google_api_key(self):
-        """Return the Google API key as JSON for frontend use."""
         return jsonify({"apiKey": self.google_api_key})
 
     def check_database_connection(self):
-        """Check if the database connection is working."""
         try:
             conn = get_db_connection()
             conn.close()
@@ -62,7 +58,6 @@ class AppService:
             return False
 
     def check_existing_places(self, latitude, longitude):
-        """Check if places exist at the given coordinates in the database."""
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('''
@@ -94,7 +89,6 @@ class AppService:
             return False
 
     def call_google_places_api(self, latitude, longitude, radius=1500, place_type="restaurant"):
-        """Call the Google Places API to fetch nearby places."""
         url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
         params = {
             'location': f"{latitude},{longitude}",
@@ -107,15 +101,12 @@ class AppService:
             google_places = response.json().get('results', [])
             for place in google_places:
                 self.insert_place_data(latitude, longitude, place)
-            return (response.status_code, google_places) # Updated to return both
-        return (response.status_code, [])  # Return an empty list if API call fails
-
+            return (response.status_code, google_places)
+        return (response.status_code, [])
 
     def insert_place_data(self, latitude, longitude, place):
-        """Insert a single place entry into the database."""
         conn = get_db_connection()
         cursor = conn.cursor()
-
         photo_data = place['photos'][0] if 'photos' in place and place['photos'] else None
         data_tuple = (
             latitude,
@@ -152,7 +143,6 @@ class AppService:
         conn.close()
 
     def rank_nearby_places(self, latitude, longitude):
-        """Select results ordered by rating and proximity."""
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
