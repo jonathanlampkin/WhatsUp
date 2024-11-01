@@ -81,7 +81,7 @@ class TestDatabaseAndIntegration(unittest.TestCase):
     # Integration-specific tests
     def test_generate_entry(self):
         # Insert a user coordinate entry, ensuring it does not conflict with previous tests
-        result = self.app_service.generate_entry(MOCK_LATITUDE, MOCK_LONGITUDE)
+        result = self.app_service.generate_entry(MOCK_LATITUDE, MOCK_LONGITUDE, testing=True)
         self.assertTrue(result, "Failed to insert entry into user_coordinates")
 
         # Verify the entry exists in the database
@@ -110,7 +110,7 @@ class TestDatabaseAndIntegration(unittest.TestCase):
         self.connection.commit()
 
         # Check if ranking works as expected
-        ranked_places = self.app_service.rank_nearby_places(MOCK_LATITUDE, MOCK_LONGITUDE)
+        ranked_places = self.app_service.rank_nearby_places(MOCK_LATITUDE, MOCK_LONGITUDE, testing=True)
         self.assertEqual(len(ranked_places), 3, "Ranking did not retrieve expected number of places")
 
         # Assert that the place with the highest rating (5.0) is ranked first
