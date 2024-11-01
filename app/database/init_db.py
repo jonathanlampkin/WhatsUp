@@ -19,6 +19,7 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 def get_db_connection(testing=False):
     """Establishes a connection to the database, choosing production or testing DB."""
     database_url = TEST_DATABASE_URL if testing else DATABASE_URL
+    print(f"Connecting to database at: {database_url}")
     result = urlparse(database_url)
     connection = psycopg2.connect(
         dbname=result.path[1:],  # Remove leading "/" from the path
@@ -29,6 +30,8 @@ def get_db_connection(testing=False):
         cursor_factory=RealDictCursor
     )
     return connection
+
+
 
 def init_db():
     """Initialize tables in the database if they do not exist."""
