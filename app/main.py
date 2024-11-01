@@ -1,7 +1,11 @@
+# app/main.py
+
 from flask import Flask, request, render_template, jsonify, Response, abort
 import os
 from dotenv import load_dotenv
 from app.services import AppService
+from app.database.init_db import SessionLocal
+from app.models import UserCoordinates, GoogleNearbyPlaces
 from prometheus_client import Counter, Histogram, generate_latest
 import logging
 import time
@@ -10,6 +14,7 @@ load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
+
 
 # Initialize AppService with the Google API key
 app_service_instance = AppService(google_api_key=GOOGLE_API_KEY)
@@ -22,11 +27,13 @@ api_call_counter = Counter('google_api_calls_total', 'Total number of Google API
 response_time_histogram = Histogram('response_time_seconds', 'Response time for endpoints', ['endpoint'])
 errors_counter = Counter('errors_total', 'Total number of errors')
 
+
 @app.route('/get-google-maps-key')
 def get_google_maps_key():
     if not GOOGLE_API_KEY:
         abort(404)
     return jsonify({"key": GOOGLE_API_KEY})
+
 
 # Track requests for Prometheus
 @app.before_request
@@ -40,15 +47,18 @@ def after_request(response):
     response_counter.inc()
     return response
 
+
 # Endpoint for Prometheus metrics
 @app.route('/metrics')
 def metrics():
     return Response(generate_latest(), mimetype='text/plain')
 
+
 @app.route('/')
 def index():
     logging.debug("Rendering index.html for user.")
     return render_template('index.html')
+
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -75,6 +85,7 @@ def health_check():
             "api_key_present": api_key_present,
             "error": error_message
         }), 500
+
 
 @app.route('/process-coordinates', methods=['POST'])
 def process_coordinates():

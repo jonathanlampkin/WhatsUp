@@ -7,19 +7,18 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Establish SQLAlchemy engine and session
 DATABASE_URL = os.getenv("DATABASE_URL")
-
-# Adjust only the Heroku DATABASE_URL if needed
+print("Connecting to database:", os.getenv("DATABASE_URL"))
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 def get_db_connection():
-    """Establishes a connection to the database."""
-    database_url = DATABASE_URL
-    print(f"Connecting to database at: {database_url}")
+    """Establish a connection to the database using DATABASE_URL."""
+    database_url = os.getenv("DATABASE_URL")
     result = urlparse(database_url)
     connection = psycopg2.connect(
-        dbname=result.path[1:],  # Remove leading "/" from the path
+        dbname=result.path[1:],
         user=result.username,
         password=result.password,
         host=result.hostname,
