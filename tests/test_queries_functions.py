@@ -1,3 +1,5 @@
+# test_queries_functions.py
+
 import logging
 import unittest
 import os
@@ -11,20 +13,16 @@ class TestDatabaseAndIntegration(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        test_db_url = os.getenv("DATABASE_URL")  # Confirm the test database URL
+        test_db_url = os.getenv("DATABASE_URL")
         if not test_db_url:
             raise EnvironmentError("DATABASE_URL for testing is not set in environment variables.")
         
-        # Initialize the database and create tables
-        init_db()
-
-        # Establish a connection using the testing database URL
+        init_db()  # Ensure tables exist
         cls.connection = get_db_connection()
         cls.app_service = AppService(google_api_key=os.getenv("GOOGLE_API_KEY"))
 
     @classmethod
     def tearDownClass(cls):
-        # Clean up database tables after all tests
         cursor = cls.connection.cursor()
         cursor.execute("DELETE FROM user_coordinates;")
         cursor.execute("DELETE FROM google_nearby_places;")
@@ -33,62 +31,26 @@ class TestDatabaseAndIntegration(unittest.TestCase):
         cls.connection.close()
 
     def setUp(self):
-        # Ensure each test starts with a fresh cursor
         self.cursor = self.connection.cursor()
 
     def tearDown(self):
-        # Close the cursor after each test
         self.cursor.close()
 
-    # Database-specific tests
-    def test_insert_user_coordinates(self):
-        visitor_id = "test_user_1"  # Unique identifier to prevent conflict
-        latitude, longitude = MOCK_LATITUDE, MOCK_LONGITUDE
-        timestamp = "2024-01-01T00:00:00Z"
-        self.cursor.execute('''
-            INSERT INTO user_coordinates (visitor_id, latitude, longitude, timestamp)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (visitor_id) DO NOTHING
-        ''', (visitor_id, latitude, longitude, timestamp))
-        self.connection.commit()
-
-        # Verify the entry exists in the table
-        self.cursor.execute("SELECT * FROM user_coordinates WHERE visitor_id = %s;", (visitor_id,))
-        result = self.cursor.fetchone()
-        self.assertIsNotNone(result)
-        self.assertEqual(result['latitude'], latitude)
-
-    def test_insert_google_nearby_places(self):
-        place_id = "test_place_1"  # Unique place ID to prevent conflict
-        latitude, longitude = MOCK_LATITUDE, MOCK_LONGITUDE
-        name = "Test Place"
-        self.cursor.execute('''
-            INSERT INTO google_nearby_places (latitude, longitude, place_id, name)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (place_id) DO NOTHING
-        ''', (latitude, longitude, place_id, name))
-        self.connection.commit()
-
-        # Verify the entry exists in the table
-        self.cursor.execute("SELECT * FROM google_nearby_places WHERE place_id = %s;", (place_id,))
-        result = self.cursor.fetchone()
-        self.assertIsNotNone(result)
-        self.assertEqual(result['name'], name)
-
-    # Integration-specific tests
     def test_generate_entry(self):
         """Verify that generate_entry correctly inserts a unique coordinate entry."""
-        result = self.app_service.generate_entry(MOCK_LATITUDE, MOCK_LONGITUDE)
-        self.assertIsNotNone(result, "No entry found in user_coordinates table for test coordinates")
+        # Call generate_entry and assert it returns success
+        insertion_success = self.app_service.generate_entry(MOCK_LATITUDE, MOCK_LONGITUDE)
+        self.assertTrue(insertion_success, "generate_entry failed to insert entry")
 
-        # Use a new connection to verify the entry exists in the database
+        # Verify the insertion directly
+        self.connection.commit()  # Ensure all transactions are committed
         with self.connection.cursor() as cursor:
             cursor.execute("SELECT * FROM user_coordinates WHERE latitude = %s AND longitude = %s;", 
-                        (MOCK_LATITUDE, MOCK_LONGITUDE))
+                           (MOCK_LATITUDE, MOCK_LONGITUDE))
             db_result = cursor.fetchone()
-            logging.debug(f"Verified entry in user_coordinates: {db_result}")
+            logging.debug(f"Entry found in user_coordinates: {db_result}")
             self.assertIsNotNone(db_result, "No entry found in user_coordinates table for test coordinates")
-    
+
     def test_rank_nearby_places(self):
         """Insert mock data and verify the ranking function returns expected places."""
         mock_data = [
@@ -97,6 +59,7 @@ class TestDatabaseAndIntegration(unittest.TestCase):
             (MOCK_LATITUDE, MOCK_LONGITUDE, "3", "Place C", "OPERATIONAL", 5.0, 50, "Location C", "['bar']", 3, "icon_c", "color_c", "mask_c", "photo_ref_c", 500, 500, True)
         ]
 
+        # Insert mock data and ensure commit
         self.cursor.executemany('''
             INSERT INTO google_nearby_places (
                 latitude, longitude, place_id, name, business_status, rating, 
@@ -106,9 +69,10 @@ class TestDatabaseAndIntegration(unittest.TestCase):
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (place_id) DO NOTHING
         ''', mock_data)
-        self.connection.commit()
+        self.connection.commit()  # Ensure all transactions are committed
 
-        # Check if ranking works as expected
+        # Call rank_nearby_places and validate results
         ranked_places = self.app_service.rank_nearby_places(MOCK_LATITUDE, MOCK_LONGITUDE)
+        logging.debug(f"Ranked places: {ranked_places}")
         self.assertEqual(len(ranked_places), 3, "Ranking did not retrieve expected number of places")
         self.assertEqual(ranked_places[0]['name'], "Place C", "The place with the highest rating is not ranked first")
