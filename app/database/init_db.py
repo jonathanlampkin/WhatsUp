@@ -7,18 +7,15 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Get the database URLs
 DATABASE_URL = os.getenv("DATABASE_URL")
-TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 
 # Adjust only the Heroku DATABASE_URL if needed
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-    # Note: Heroku PostgreSQL uses "postgres://" instead of "postgresql://", which can cause compatibility issues.
 
-def get_db_connection(testing=False):
-    """Establishes a connection to the database, choosing production or testing DB."""
-    database_url = TEST_DATABASE_URL if testing else DATABASE_URL
+def get_db_connection():
+    """Establishes a connection to the database."""
+    database_url = DATABASE_URL
     print(f"Connecting to database at: {database_url}")
     result = urlparse(database_url)
     connection = psycopg2.connect(
