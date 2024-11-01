@@ -16,9 +16,12 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 def get_db_connection():
     """Establish a connection to the database using DATABASE_URL."""
     database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        raise ValueError("DATABASE_URL environment variable is not set.")
+
     result = urlparse(database_url)
     connection = psycopg2.connect(
-        dbname=result.path[1:],
+        dbname=result.path[1:],  # Remove leading "/" from the path
         user=result.username,
         password=result.password,
         host=result.hostname,
@@ -26,6 +29,7 @@ def get_db_connection():
         cursor_factory=RealDictCursor
     )
     return connection
+
 
 def init_db():
     """Initialize tables in the database if they do not exist."""
