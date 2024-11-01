@@ -18,8 +18,8 @@ class TestDatabaseAndIntegration(unittest.TestCase):
         if not test_db_url:
             raise EnvironmentError("TEST_DATABASE_URL is not set in environment variables.")
         
-        # Initialize the database
-        init_db()
+        # Initialize the database in testing mode
+        init_db(testing=True)
 
         # Establish a connection using the testing database URL
         cls.connection = get_db_connection(testing=True)

@@ -6,6 +6,7 @@ from psycopg2.extras import RealDictCursor
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 
+# Load environment variables from .env file
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -18,11 +19,12 @@ if TEST_DATABASE_URL and TEST_DATABASE_URL.startswith("postgres://"):
     TEST_DATABASE_URL = TEST_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 def get_db_connection(testing=False):
-    """Establishes a connection to the specified database (testing or production)."""
+    """Get a connection to the test or production database."""
     database_url = TEST_DATABASE_URL if testing else DATABASE_URL
-    print(f"Connecting to database at: {database_url}")
     if not database_url:
         raise ValueError("Database URL is not set. Please check environment variables.")
+    
+    print(f"Using {'TEST_DATABASE_URL' if testing else 'DATABASE_URL'}: {database_url}")
     
     result = urlparse(database_url)
     connection = psycopg2.connect(
