@@ -1,5 +1,3 @@
-# services.py
-
 import os
 import requests
 import json
@@ -25,22 +23,22 @@ class AppService:
         self.coords = []
 
     @contextmanager
-    def db_connection(self, testing=False):
-        """Context manager for database connection to handle both testing and production."""
-        conn = get_db_connection(testing=testing)
+    def db_connection(self):
+        """Context manager for database connection."""
+        conn = get_db_connection()
         try:
             yield conn
         finally:
             conn.close()
 
-    def process_coordinates(self, coords, testing=False):
+    def process_coordinates(self, coords):
         latitude, longitude = coords
-        visitor_id = self.generate_entry(latitude, longitude, testing=testing)
-        if self.check_existing_places(latitude, longitude, testing=testing):
-            self.rank_nearby_places(latitude, longitude, testing=testing)
+        visitor_id = self.generate_entry(latitude, longitude)
+        if self.check_existing_places(latitude, longitude):
+            self.rank_nearby_places(latitude, longitude)
         else:
             self.call_google_places_api(latitude, longitude)
-            self.rank_nearby_places(latitude, longitude, testing=testing)
+            self.rank_nearby_places(latitude, longitude)
         return self.places
 
     def get_rabbitmq_connection(self):
@@ -61,15 +59,15 @@ class AppService:
     def get_google_api_key(self):
         return jsonify({"apiKey": self.google_api_key})
 
-    def check_database_connection(self, testing=False):
+    def check_database_connection(self):
         try:
-            with self.db_connection(testing=testing) as conn:
+            with self.db_connection() as conn:
                 return True
         except DatabaseError:
             return False
 
-    def check_existing_places(self, latitude, longitude, testing=False):
-        with self.db_connection(testing=testing) as conn:
+    def check_existing_places(self, latitude, longitude):
+        with self.db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT 1 FROM google_nearby_places 
@@ -78,11 +76,11 @@ class AppService:
             result = cursor.fetchone()
             return result is not None
 
-    def generate_entry(self, latitude, longitude, testing=False):
+    def generate_entry(self, latitude, longitude):
         visitor_id = str(uuid.uuid4())
         timestamp = datetime.now().isoformat()
         try:
-            with self.db_connection(testing=testing) as conn:
+            with self.db_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
                     INSERT INTO user_coordinates (visitor_id, latitude, longitude, timestamp)
@@ -99,9 +97,6 @@ class AppService:
         except DatabaseError as e:
             logging.error(f"Error saving coordinates: {e}")
             return False
-
-
-
 
     def call_google_places_api(self, latitude, longitude, radius=1500, place_type="restaurant"):
         url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
@@ -154,10 +149,10 @@ class AppService:
             ''', data_tuple)
 
             conn.commit()
-    
-    def rank_nearby_places(self, latitude, longitude, testing=False):
+
+    def rank_nearby_places(self, latitude, longitude):
         try:
-            with self.db_connection(testing=testing) as conn:
+            with self.db_connection() as conn:
                 cursor = conn.cursor()
                 query = '''
                     SELECT 
@@ -183,5 +178,3 @@ class AppService:
             logging.error(f"Database error: {e}")
             self.places = []
             return self.places
-
-# egg
