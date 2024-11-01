@@ -74,6 +74,7 @@ jobs:
         env:
           DATABASE_URL: "${{ secrets.TEST_DATABASE_URL }}"
           RABBITMQ_URL: "${{ secrets.RABBITMQ_URL }}"
+          GOOGLE_API_KEY: "${{ secrets.GOOGLE_API_KEY }}"  # Use GitHub secrets for API key
         run: |
           python -m unittest discover -s tests -v
 

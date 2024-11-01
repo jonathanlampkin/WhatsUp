@@ -31,8 +31,6 @@ def get_db_connection(testing=False):
     )
     return connection
 
-
-
 def init_db():
     """Initialize tables in the database if they do not exist."""
     connection = None
