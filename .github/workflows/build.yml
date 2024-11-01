@@ -66,7 +66,7 @@ jobs:
 
       - name: Initialize the Database
         env:
-          DATABASE_URL: "${{ secrets.TEST_DATABASE_URL }}"
+          DATABASE_URL: "${{ secrets.TEST_DATABASE_URL }}"  # Ensure this points to your local test db
         run: |
           python app/database/init_db.py
 
@@ -74,13 +74,14 @@ jobs:
         env:
           DATABASE_URL: "${{ secrets.TEST_DATABASE_URL }}"
           RABBITMQ_URL: "${{ secrets.RABBITMQ_URL }}"
-          GOOGLE_API_KEY: "${{ secrets.GOOGLE_API_KEY }}"  # Ensure this is valid
+          GOOGLE_API_KEY: "${{ secrets.GOOGLE_API_KEY }}"  # Use GitHub secrets for API key
         run: |
           python -m unittest discover -s tests -v
 
   deploy:
     runs-on: ubuntu-latest
     needs: build
+    if: github.event_name == 'push'
 
     steps:
       - name: Check out the code

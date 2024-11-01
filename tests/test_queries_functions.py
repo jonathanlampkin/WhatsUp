@@ -12,7 +12,7 @@ class TestDatabaseAndIntegration(unittest.TestCase):
     def setUpClass(cls):
         # Initialize the database and establish a test connection
         init_db()
-        cls.connection = get_db_connection(testing=True)
+        cls.connection = get_db_connection()
         cls.cursor = cls.connection.cursor()
         cls.app_service = AppService(google_api_key=os.getenv("GOOGLE_API_KEY"))
 

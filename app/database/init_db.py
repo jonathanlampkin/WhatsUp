@@ -14,6 +14,7 @@ TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 # Adjust only the Heroku DATABASE_URL if needed
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    # Note: Heroku PostgreSQL uses "postgres://" instead of "postgresql://", which can cause compatibility issues.
 
 def get_db_connection(testing=False):
     """Establishes a connection to the database, choosing production or testing DB."""
