@@ -60,9 +60,25 @@ jobs:
 
       - name: Wait for RabbitMQ and PostgreSQL to be ready
         run: |
-          until curl -I http://localhost:15672 2>&1 | grep -q '200 OK'; do echo "Waiting for RabbitMQ..."; sleep 5; done
-          until pg_isready -h localhost -p 5432 -U postgres; do echo "Waiting for PostgreSQL..."; sleep 5; done
-        timeout-minutes: 5
+          for i in {1..12}; do
+            if curl -s http://localhost:15672 | grep 'RabbitMQ Management'; then
+              echo "RabbitMQ is ready."
+              break
+            else
+              echo "Waiting for RabbitMQ..."
+              sleep 5
+            fi
+          done
+          for i in {1..12}; do
+            if pg_isready -h localhost -p 5432 -U postgres; then
+              echo "PostgreSQL is ready."
+              break
+            else
+              echo "Waiting for PostgreSQL..."
+              sleep 5
+            fi
+          done
+        timeout-minutes: 2
 
       - name: Initialize the Database
         env:

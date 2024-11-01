@@ -1,3 +1,5 @@
+app/database/init_db.py:
+
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -11,26 +13,25 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 
-# Adjust only the Heroku DATABASE_URL if needed
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-    # Note: Heroku PostgreSQL uses "postgres://" instead of "postgresql://", which can cause compatibility issues.
 
 def get_db_connection(testing=False):
     """Establishes a connection to the database, choosing production or testing DB."""
     database_url = TEST_DATABASE_URL if testing else DATABASE_URL
     print(f"Connecting to database at: {database_url}")
+    if not database_url:
+        raise ValueError("Database URL is not set. Please check environment variables.")
     result = urlparse(database_url)
     connection = psycopg2.connect(
-        dbname=result.path[1:],  # Remove leading "/" from the path
+        dbname=result.path[1:],
         user=result.username,
         password=result.password,
-        host=result.hostname,
-        port=result.port,
+        host=result.hostname or "localhost",  # Ensure 'localhost' as fallback
+        port=result.port or 5432,
         cursor_factory=RealDictCursor
     )
     return connection
-
 
 
 def init_db():
@@ -38,6 +39,7 @@ def init_db():
     connection = None
     cursor = None
     try:
+        print(f"Initializing database with DATABASE_URL: {DATABASE_URL}")
         connection = get_db_connection()
         cursor = connection.cursor()
         

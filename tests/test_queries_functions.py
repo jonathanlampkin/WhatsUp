@@ -3,13 +3,14 @@ import os
 from app.database.init_db import init_db, get_db_connection
 from app.services import AppService
 
-MOCK_LATITUDE = 37.7749
-MOCK_LONGITUDE = -122.4194
-
 class TestDatabaseAndIntegration(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
+        # Check if TEST_DATABASE_URL is available
+        if not os.getenv("TEST_DATABASE_URL"):
+            raise EnvironmentError("TEST_DATABASE_URL is not set in environment variables.")
+        
         # Initialize the database and establish a test connection
         init_db()
         cls.connection = get_db_connection(testing=True)
