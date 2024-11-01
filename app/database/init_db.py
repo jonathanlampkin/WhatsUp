@@ -1,31 +1,27 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-# Establish SQLAlchemy engine and session
+# Get the database URLs
 DATABASE_URL = os.getenv("DATABASE_URL")
-print("Connecting to database:", os.getenv("DATABASE_URL"))
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+
+# Adjust only the Heroku DATABASE_URL if needed
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    # Note: Heroku PostgreSQL uses "postgres://" instead of "postgresql://", which can cause compatibility issues.
 
-
-engine = create_engine(DATABASE_URL)
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-def get_db_connection():
-    """Establish a connection to the database using DATABASE_URL."""
-    database_url = os.getenv("DATABASE_URL")
+def get_db_connection(testing=False):
+    """Establishes a connection to the database, choosing production or testing DB."""
+    database_url = TEST_DATABASE_URL if testing else DATABASE_URL
     result = urlparse(database_url)
     connection = psycopg2.connect(
-        dbname=result.path[1:],
+        dbname=result.path[1:],  # Remove leading "/" from the path
         user=result.username,
         password=result.password,
         host=result.hostname,

@@ -1,31 +1,18 @@
 import os
 import requests
 import json
-import psycopg2
-from psycopg2.extras import RealDictCursor
 import uuid
 from datetime import datetime
-from flask import jsonify
-from dotenv import load_dotenv
 import logging
 import pika  # RabbitMQ
+from psycopg2 import DatabaseError
+from psycopg2.extras import RealDictCursor
+from dotenv import load_dotenv
+from flask import jsonify
 from urllib.parse import urlparse
+from app.database.init_db import get_db_connection
 
 load_dotenv()
-
-# Establish PostgreSQL connection
-def get_db_connection():
-    database_url = os.getenv("DATABASE_URL") or os.getenv("LOCAL_DATABASE_URL")
-    result = urlparse(database_url)
-    connection = psycopg2.connect(
-        database=result.path[1:],  # Remove leading "/" from the path
-        user=result.username,
-        password=result.password,
-        host=result.hostname,
-        port=result.port,
-        cursor_factory=RealDictCursor
-    )
-    return connection
 
 class AppService:
     def __init__(self, google_api_key=None):
@@ -35,9 +22,7 @@ class AppService:
         self.coords = []
 
     def process_coordinates(self, coords):
-        """Process each coordinate: store, check, fetch, and rank nearby places."""
         latitude, longitude = coords
-
         visitor_id = self.generate_entry(latitude, longitude)
         if self.check_existing_places(latitude, longitude):
             self.rank_nearby_places(latitude, longitude)
@@ -56,28 +41,23 @@ class AppService:
         channel = connection.channel()
         queue_name = "coordinates_queue"
         channel.queue_declare(queue=queue_name)
-
-        # Publish the coordinates as a message
         message = json.dumps({"latitude": latitude, "longitude": longitude})
         channel.basic_publish(exchange='', routing_key=queue_name, body=message)
         logging.info(f"[x] Sent {message} to RabbitMQ")
         connection.close()
 
     def get_google_api_key(self):
-        """Return the Google API key as JSON for frontend use."""
         return jsonify({"apiKey": self.google_api_key})
 
     def check_database_connection(self):
-        """Check if the database connection is working."""
         try:
             conn = get_db_connection()
             conn.close()
             return True
-        except psycopg2.OperationalError:
+        except DatabaseError:
             return False
 
     def check_existing_places(self, latitude, longitude):
-        """Check if places exist at the given coordinates in the database."""
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('''
@@ -104,12 +84,11 @@ class AppService:
             conn.close()
             logging.info(f"Coordinates saved: {latitude}, {longitude}")
             return True
-        except psycopg2.DatabaseError as e:
+        except DatabaseError as e:
             logging.error(f"Error saving coordinates: {e}")
             return False
 
     def call_google_places_api(self, latitude, longitude, radius=1500, place_type="restaurant"):
-        """Call the Google Places API to fetch nearby places."""
         url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
         params = {
             'location': f"{latitude},{longitude}",
@@ -122,15 +101,12 @@ class AppService:
             google_places = response.json().get('results', [])
             for place in google_places:
                 self.insert_place_data(latitude, longitude, place)
-            return (response.status_code, google_places) # Updated to return both
-        return (response.status_code, [])  # Return an empty list if API call fails
-
+            return (response.status_code, google_places)
+        return (response.status_code, [])
 
     def insert_place_data(self, latitude, longitude, place):
-        """Insert a single place entry into the database."""
         conn = get_db_connection()
         cursor = conn.cursor()
-
         photo_data = place['photos'][0] if 'photos' in place and place['photos'] else None
         data_tuple = (
             latitude,
@@ -167,7 +143,6 @@ class AppService:
         conn.close()
 
     def rank_nearby_places(self, latitude, longitude):
-        """Select results ordered by rating and proximity."""
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -189,7 +164,7 @@ class AppService:
             ]
             logging.debug(f"Ranked places: {self.places}")
             return self.places
-        except psycopg2.Error as e:
+        except DatabaseError as e:
             logging.error(f"Database error: {e}")
             self.places = []
             return self.places
