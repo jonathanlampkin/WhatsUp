@@ -1,71 +1,75 @@
+# services.py
+
 import os
 import requests
 import json
 import uuid
 from datetime import datetime
 import logging
-import pika
+import pika  # RabbitMQ
 from psycopg2 import DatabaseError
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
+from flask import jsonify
 from urllib.parse import urlparse
-from contextlib import contextmanager
 from app.database.init_db import get_db_connection
+from contextlib import contextmanager
 
 load_dotenv()
-
-@contextmanager
-def db_connection(testing=False):
-    """Context manager for database connection, ensuring cleanup."""
-    conn = get_db_connection(testing=testing)
-    try:
-        yield conn
-    finally:
-        conn.close()
 
 class AppService:
     def __init__(self, google_api_key=None):
         self.google_api_key = google_api_key
         self.places = []
+        self.results = []
+        self.coords = []
 
-    def process_coordinates(self, coords):
+    @contextmanager
+    def db_connection(self, testing=False):
+        """Context manager for database connection to handle both testing and production."""
+        conn = get_db_connection(testing=testing)
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+    def process_coordinates(self, coords, testing=False):
         latitude, longitude = coords
-        if not self.check_existing_places(latitude, longitude):
+        visitor_id = self.generate_entry(latitude, longitude, testing=testing)
+        if self.check_existing_places(latitude, longitude, testing=testing):
+            self.rank_nearby_places(latitude, longitude, testing=testing)
+        else:
             self.call_google_places_api(latitude, longitude)
-        self.rank_nearby_places(latitude, longitude)
+            self.rank_nearby_places(latitude, longitude, testing=testing)
         return self.places
 
     def get_rabbitmq_connection(self):
         rabbitmq_url = os.getenv("RABBITMQ_URL")
-        if not rabbitmq_url:
-            logging.error("RABBITMQ_URL is not set in environment variables.")
-            return None
         params = pika.URLParameters(rabbitmq_url)
         return pika.BlockingConnection(params)
 
     def send_coordinates(self, latitude, longitude):
         connection = self.get_rabbitmq_connection()
-        if connection:
-            channel = connection.channel()
-            queue_name = "coordinates_queue"
-            channel.queue_declare(queue=queue_name)
-            message = json.dumps({"latitude": latitude, "longitude": longitude})
-            channel.basic_publish(exchange='', routing_key=queue_name, body=message)
-            logging.info(f"[x] Sent {message} to RabbitMQ")
-            connection.close()
-        else:
-            logging.error("Failed to send coordinates: RabbitMQ connection is not established.")
+        channel = connection.channel()
+        queue_name = "coordinates_queue"
+        channel.queue_declare(queue=queue_name)
+        message = json.dumps({"latitude": latitude, "longitude": longitude})
+        channel.basic_publish(exchange='', routing_key=queue_name, body=message)
+        logging.info(f"[x] Sent {message} to RabbitMQ")
+        connection.close()
 
-    def check_database_connection(self):
+    def get_google_api_key(self):
+        return jsonify({"apiKey": self.google_api_key})
+
+    def check_database_connection(self, testing=False):
         try:
-            with db_connection() as conn:
-                pass
-            return True
+            with self.db_connection(testing=testing) as conn:
+                return True
         except DatabaseError:
             return False
 
-    def check_existing_places(self, latitude, longitude):
-        with db_connection() as conn:
+    def check_existing_places(self, latitude, longitude, testing=False):
+        with self.db_connection(testing=testing) as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT 1 FROM google_nearby_places 
@@ -74,11 +78,11 @@ class AppService:
             result = cursor.fetchone()
             return result is not None
 
-    def generate_entry(self, latitude, longitude):
+    def generate_entry(self, latitude, longitude, testing=False):
         visitor_id = str(uuid.uuid4())
         timestamp = datetime.now().isoformat()
         try:
-            with db_connection() as conn:
+            with self.db_connection(testing=testing) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
                     INSERT INTO user_coordinates (visitor_id, latitude, longitude, timestamp)
@@ -86,8 +90,8 @@ class AppService:
                     ON CONFLICT (visitor_id) DO NOTHING
                 ''', (visitor_id, latitude, longitude, timestamp))
                 conn.commit()
-            logging.info(f"Coordinates saved: {latitude}, {longitude}")
-            return True
+                logging.info(f"Coordinates saved: {latitude}, {longitude}")
+                return True
         except DatabaseError as e:
             logging.error(f"Error saving coordinates: {e}")
             return False
@@ -105,25 +109,33 @@ class AppService:
             google_places = response.json().get('results', [])
             for place in google_places:
                 self.insert_place_data(latitude, longitude, place)
-            return response.status_code, google_places
-        else:
-            logging.error(f"Failed to fetch places from Google API: {response.status_code} - {response.text}")
-            return response.status_code, []
+            return (response.status_code, google_places)
+        return (response.status_code, [])
 
     def insert_place_data(self, latitude, longitude, place):
-        with db_connection() as conn:
+        with self.db_connection() as conn:
             cursor = conn.cursor()
-            photo_data = place.get('photos', [{}])[0]
+            photo_data = place['photos'][0] if 'photos' in place and place['photos'] else None
             data_tuple = (
-                latitude, longitude, place.get("place_id"), place.get("name"),
-                place.get("business_status"), place.get("rating"), 
-                place.get("user_ratings_total"), place.get("vicinity"), 
-                json.dumps(place.get("types", [])), place.get("price_level"), 
-                place.get("icon"), place.get("icon_background_color"), 
-                place.get("icon_mask_base_uri"), photo_data.get("photo_reference"),
-                photo_data.get("height"), photo_data.get("width"),
-                place.get("opening_hours", {}).get("open_now")
+                latitude,
+                longitude,
+                place.get("place_id"),
+                place.get("name"),
+                place.get("business_status"),
+                place.get("rating"),
+                place.get("user_ratings_total"),
+                place.get("vicinity"),
+                json.dumps(place.get("types", [])),
+                place.get("price_level"),
+                place.get("icon"),
+                place.get("icon_background_color"),
+                place.get("icon_mask_base_uri"),
+                photo_data["photo_reference"] if photo_data else None,
+                photo_data["height"] if photo_data else None,
+                photo_data["width"] if photo_data else None,
+                place.get("opening_hours", {}).get("open_now", None)
             )
+
             cursor.execute('''
                 INSERT INTO google_nearby_places (
                     latitude, longitude, place_id, name, business_status, rating, 
@@ -133,25 +145,31 @@ class AppService:
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (place_id) DO NOTHING
             ''', data_tuple)
+
             conn.commit()
 
-    def rank_nearby_places(self, latitude, longitude):
-        with db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT 
-                    name, rating, user_ratings_total, price_level, open_now, 
-                    (ABS(latitude - %s) + ABS(longitude - %s)) AS proximity
-                FROM google_nearby_places
-                WHERE latitude = %s AND longitude = %s
-                ORDER BY rating DESC, proximity ASC
-                LIMIT 10;
-            ''', (latitude, longitude, latitude, longitude))
-            results = cursor.fetchall()
-            self.places = [
-                {"name": row["name"], "rating": row["rating"], "user_ratings_total": row["user_ratings_total"],
-                 "price_level": row["price_level"], "open_now": row["open_now"]}
-                for row in results
-            ]
-            logging.debug(f"Ranked places: {self.places}")
+    def rank_nearby_places(self, latitude, longitude, testing=False):
+        try:
+            with self.db_connection(testing=testing) as conn:
+                cursor = conn.cursor()
+                query = '''
+                    SELECT 
+                        name, rating, user_ratings_total, price_level, open_now, 
+                        (ABS(latitude - %s) + ABS(longitude - %s)) AS proximity
+                    FROM google_nearby_places
+                    WHERE latitude = %s AND longitude = %s
+                    ORDER BY rating DESC, proximity ASC
+                    LIMIT 10;
+                '''
+                cursor.execute(query, (latitude, longitude, latitude, longitude))
+                results = cursor.fetchall()
+                self.places = [
+                    {"name": row["name"], "rating": row["rating"], "user_ratings_total": row["user_ratings_total"], "price_level": row["price_level"], "open_now": row["open_now"]}
+                    for row in results
+                ]
+                logging.debug(f"Ranked places: {self.places}")
+                return self.places
+        except DatabaseError as e:
+            logging.error(f"Database error: {e}")
+            self.places = []
             return self.places
