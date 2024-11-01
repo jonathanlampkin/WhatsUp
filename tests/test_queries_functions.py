@@ -20,10 +20,10 @@ class TestDatabaseAndIntegration(unittest.TestCase):
             raise EnvironmentError("TEST_DATABASE_URL is not set in environment variables.")
         
         # Initialize the database in testing mode
-        init_db(testing=True)
+        init_db()
 
         # Establish a connection using the testing database URL
-        cls.connection = get_db_connection(testing=True)
+        cls.connection = get_db_connection()
         cls.app_service = AppService(google_api_key=os.getenv("GOOGLE_API_KEY"))
 
     @classmethod
