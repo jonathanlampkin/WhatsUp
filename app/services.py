@@ -18,13 +18,14 @@ def get_db_connection():
     database_url = os.getenv("DATABASE_URL")
     result = urlparse(database_url)
     connection = psycopg2.connect(
-        database=result.path[1:],  # Remove leading "/" from the path
+        dbname=result.path[1:],  # Remove leading "/" from the path
         user=result.username,
         password=result.password,
         host=result.hostname,
         port=result.port,
         cursor_factory=RealDictCursor
     )
+    logging.debug(f"Established connection to database: {database_url}")
     return connection
 
 class AppService:
@@ -37,7 +38,6 @@ class AppService:
     def process_coordinates(self, coords):
         """Process each coordinate: store, check, fetch, and rank nearby places."""
         latitude, longitude = coords
-
         visitor_id = self.generate_entry(latitude, longitude)
         if self.check_existing_places(latitude, longitude):
             self.rank_nearby_places(latitude, longitude)
@@ -82,9 +82,11 @@ class AppService:
         ''', (latitude, longitude))
         result = cursor.fetchone()
         conn.close()
+        logging.debug(f"Checked existing places for ({latitude}, {longitude}): {'Found' if result else 'Not found'}")
         return result is not None
 
     def generate_entry(self, latitude, longitude):
+        """Generate a unique visitor entry in the user_coordinates table."""
         visitor_id = str(uuid.uuid4())
         timestamp = datetime.now().isoformat()
         try:
@@ -95,14 +97,17 @@ class AppService:
                 VALUES (%s, %s, %s, %s)
                 ON CONFLICT (visitor_id) DO NOTHING
             ''', (visitor_id, latitude, longitude, timestamp))
-            conn.commit()  # Explicit commit
+            conn.commit()
+
+            cursor.execute("SELECT * FROM user_coordinates WHERE visitor_id = %s", (visitor_id,))
+            result = cursor.fetchone()
             cursor.close()
             conn.close()
-            logging.info(f"Coordinates saved: {latitude}, {longitude}")
-            return True
+            logging.info(f"Inserted user coordinate entry: {result}")
+            return result
         except psycopg2.DatabaseError as e:
             logging.error(f"Error saving coordinates: {e}")
-            return False
+            return None
 
     def call_google_places_api(self, latitude, longitude, radius=1500, place_type="restaurant"):
         """Call the Google Places API to fetch nearby places."""
@@ -118,11 +123,13 @@ class AppService:
             google_places = response.json().get('results', [])
             for place in google_places:
                 self.insert_place_data(latitude, longitude, place)
-            return google_places
-        return []
+            logging.info(f"Fetched and inserted {len(google_places)} places from Google API.")
+            return (response.status_code, google_places)
+        logging.warning(f"Google Places API call failed with status: {response.status_code}")
+        return (response.status_code, [])
 
     def insert_place_data(self, latitude, longitude, place):
-        """Insert a single place entry into the database."""
+        """Insert a single place entry into the google_nearby_places table."""
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -156,13 +163,13 @@ class AppService:
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (place_id) DO NOTHING
         ''', data_tuple)
-
-        conn.commit()  # Explicit commit
+        conn.commit()
         cursor.close()
         conn.close()
+        logging.debug(f"Inserted place data for {place.get('name')}")
 
     def rank_nearby_places(self, latitude, longitude):
-        """Select results ordered by rating and proximity."""
+        """Rank nearby places by rating and proximity."""
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -177,6 +184,7 @@ class AppService:
             '''
             cursor.execute(query, (latitude, longitude, latitude, longitude))
             results = cursor.fetchall()
+            cursor.close()
             conn.close()
             self.places = [
                 {"name": row["name"], "rating": row["rating"], "user_ratings_total": row["user_ratings_total"], "price_level": row["price_level"], "open_now": row["open_now"]}
@@ -185,6 +193,6 @@ class AppService:
             logging.debug(f"Ranked places: {self.places}")
             return self.places
         except psycopg2.Error as e:
-            logging.error(f"Database error: {e}")
+            logging.error(f"Database error during ranking: {e}")
             self.places = []
             return self.places

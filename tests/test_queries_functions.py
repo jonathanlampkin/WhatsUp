@@ -4,7 +4,6 @@ import os
 from app.database.init_db import init_db, get_db_connection
 from app.services import AppService
 
-# Define mock latitude and longitude values
 MOCK_LATITUDE = 37.7749
 MOCK_LONGITUDE = -122.4194
 
@@ -12,15 +11,14 @@ class TestDatabaseAndIntegration(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        # Use DATABASE_URL directly for both production and testing
-        db_url = os.getenv("DATABASE_URL")
-        if not db_url:
-            raise EnvironmentError("DATABASE_URL is not set in environment variables.")
+        test_db_url = os.getenv("DATABASE_URL")  # Confirm the test database URL
+        if not test_db_url:
+            raise EnvironmentError("DATABASE_URL for testing is not set in environment variables.")
         
-        # Initialize the database in testing mode
+        # Initialize the database and create tables
         init_db()
 
-        # Establish a connection using DATABASE_URL
+        # Establish a connection using the testing database URL
         cls.connection = get_db_connection()
         cls.app_service = AppService(google_api_key=os.getenv("GOOGLE_API_KEY"))
 
@@ -35,7 +33,7 @@ class TestDatabaseAndIntegration(unittest.TestCase):
         cls.connection.close()
 
     def setUp(self):
-        # Start each test with a fresh cursor
+        # Ensure each test starts with a fresh cursor
         self.cursor = self.connection.cursor()
 
     def tearDown(self):
@@ -79,20 +77,20 @@ class TestDatabaseAndIntegration(unittest.TestCase):
 
     # Integration-specific tests
     def test_generate_entry(self):
-        # Insert a user coordinate entry, ensuring it does not conflict with previous tests
+        """Verify that generate_entry correctly inserts a unique coordinate entry."""
         result = self.app_service.generate_entry(MOCK_LATITUDE, MOCK_LONGITUDE)
-        self.assertTrue(result, "Failed to insert entry into user_coordinates")
+        self.assertIsNotNone(result, "No entry found in user_coordinates table for test coordinates")
 
         # Use a new connection to verify the entry exists in the database
         with self.connection.cursor() as cursor:
             cursor.execute("SELECT * FROM user_coordinates WHERE latitude = %s AND longitude = %s;", 
-                           (MOCK_LATITUDE, MOCK_LONGITUDE))
-            result = cursor.fetchone()
-            logging.debug(f"Verified entry in user_coordinates: {result}")
-            self.assertIsNotNone(result, "No entry found in user_coordinates table for test coordinates")
-
+                        (MOCK_LATITUDE, MOCK_LONGITUDE))
+            db_result = cursor.fetchone()
+            logging.debug(f"Verified entry in user_coordinates: {db_result}")
+            self.assertIsNotNone(db_result, "No entry found in user_coordinates table for test coordinates")
+    
     def test_rank_nearby_places(self):
-        # Insert mock data for ranking test with unique place IDs to avoid conflicts
+        """Insert mock data and verify the ranking function returns expected places."""
         mock_data = [
             (MOCK_LATITUDE, MOCK_LONGITUDE, "1", "Place A", "OPERATIONAL", 4.5, 100, "Location A", "['restaurant']", 2, "icon_a", "color_a", "mask_a", "photo_ref_a", 400, 400, True),
             (MOCK_LATITUDE, MOCK_LONGITUDE, "2", "Place B", "OPERATIONAL", 4.0, 150, "Location B", "['cafe']", 1, "icon_b", "color_b", "mask_b", "photo_ref_b", 300, 300, False),
@@ -110,19 +108,7 @@ class TestDatabaseAndIntegration(unittest.TestCase):
         ''', mock_data)
         self.connection.commit()
 
-        # Debug: Confirm data in google_nearby_places after insertion
-        with self.connection.cursor() as cursor:
-            cursor.execute("SELECT * FROM google_nearby_places WHERE latitude = %s AND longitude = %s", 
-                           (MOCK_LATITUDE, MOCK_LONGITUDE))
-            inserted_data = cursor.fetchall()
-            logging.debug(f"Inserted data for ranking test in google_nearby_places: {inserted_data}")
-
         # Check if ranking works as expected
         ranked_places = self.app_service.rank_nearby_places(MOCK_LATITUDE, MOCK_LONGITUDE)
         self.assertEqual(len(ranked_places), 3, "Ranking did not retrieve expected number of places")
-
-        # Assert that the place with the highest rating (5.0) is ranked first
         self.assertEqual(ranked_places[0]['name'], "Place C", "The place with the highest rating is not ranked first")
-
-if __name__ == "__main__":
-    unittest.main()
