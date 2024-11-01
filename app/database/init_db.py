@@ -1,7 +1,5 @@
-# init_db.py
-
 import os
-import psycopg2
+from psycopg2 import connect, DatabaseError
 from psycopg2.extras import RealDictCursor
 from urllib.parse import urlparse
 from dotenv import load_dotenv
@@ -9,47 +7,36 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+DATABASE_URL = os.getenv("DATABASE_URL")  # Single variable handling both cases
 
 # Replace "postgres://" with "postgresql://" for compatibility
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-if TEST_DATABASE_URL and TEST_DATABASE_URL.startswith("postgres://"):
-    TEST_DATABASE_URL = TEST_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-def get_db_connection(testing=False):
-    """Get a connection to the test or production database."""
-    database_url = TEST_DATABASE_URL if testing else DATABASE_URL
-    if not database_url:
-        raise ValueError("Database URL is not set. Please check environment variables.")
-    
-    print(f"Using {'TEST_DATABASE_URL' if testing else 'DATABASE_URL'}: {database_url}")
-    
-    result = urlparse(database_url)
-    connection = psycopg2.connect(
-        dbname=result.path[1:],  # Remove leading "/" from the path
+def get_db_connection():
+    """Establish a connection to the database using DATABASE_URL."""
+    if not DATABASE_URL:
+        raise ValueError("DATABASE_URL is not set.")
+    result = urlparse(DATABASE_URL)
+    connection = connect(
+        dbname=result.path[1:],
         user=result.username,
         password=result.password,
-        host=result.hostname or "localhost",
-        port=result.port or 5432,
+        host=result.hostname,
+        port=result.port,
         cursor_factory=RealDictCursor
     )
     return connection
 
-def init_db(testing=False):
+
+def init_db():
     """Initialize tables in the database if they do not exist."""
     connection = None
     cursor = None
     try:
-        db_type = "TEST_DATABASE_URL" if testing else "DATABASE_URL"
-        print(f"Initializing database with {db_type}: {TEST_DATABASE_URL if testing else DATABASE_URL}")
-        
-        # Get a connection to the test or production database
-        connection = get_db_connection(testing=testing)
+        connection = get_db_connection()
         cursor = connection.cursor()
         
-        # Create the user_coordinates table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS user_coordinates (
                 id SERIAL PRIMARY KEY,
@@ -60,7 +47,6 @@ def init_db(testing=False):
             )
         ''')
 
-        # Create the google_nearby_places table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS google_nearby_places (
                 id SERIAL PRIMARY KEY,
@@ -84,7 +70,6 @@ def init_db(testing=False):
             )
         ''')
         
-        # Commit the transactions
         connection.commit()
         print("Database initialized successfully.")
         
@@ -97,5 +82,4 @@ def init_db(testing=False):
             connection.close()
 
 if __name__ == "__main__":
-    # Run init_db for the production database by default
     init_db()
