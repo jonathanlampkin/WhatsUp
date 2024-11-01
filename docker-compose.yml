@@ -10,7 +10,7 @@ services:
       - db
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:admin@db:5432/test_db}  # Default to local test database
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-"default_api_key"}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - RABBITMQ_URL=${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
 
   db:
