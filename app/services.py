@@ -91,14 +91,15 @@ class AppService:
                 ''', (visitor_id, latitude, longitude, timestamp))
                 conn.commit()
                 
-                # Debug: Verify insertion by fetching the row just inserted
+                # Debug: Verify insertion by querying the row
                 cursor.execute("SELECT * FROM user_coordinates WHERE visitor_id = %s", (visitor_id,))
                 inserted_entry = cursor.fetchone()
-                logging.debug(f"Inserted entry: {inserted_entry}")
+                logging.debug(f"Inserted entry into user_coordinates: {inserted_entry}")
                 return inserted_entry is not None
         except DatabaseError as e:
             logging.error(f"Error saving coordinates: {e}")
             return False
+
 
 
 
@@ -153,7 +154,7 @@ class AppService:
             ''', data_tuple)
 
             conn.commit()
-
+    
     def rank_nearby_places(self, latitude, longitude, testing=False):
         try:
             with self.db_connection(testing=testing) as conn:
@@ -169,8 +170,10 @@ class AppService:
                 '''
                 cursor.execute(query, (latitude, longitude, latitude, longitude))
                 results = cursor.fetchall()
-                # Debugging: Print the retrieved places
-                logging.debug(f"Retrieved ranked places: {results}")
+                
+                # Debug: Print the retrieved places
+                logging.debug(f"Retrieved ranked places from google_nearby_places: {results}")
+                
                 self.places = [
                     {"name": row["name"], "rating": row["rating"], "user_ratings_total": row["user_ratings_total"], "price_level": row["price_level"], "open_now": row["open_now"]}
                     for row in results
@@ -179,5 +182,5 @@ class AppService:
         except DatabaseError as e:
             logging.error(f"Database error: {e}")
             self.places = []
-            return self.places
+            return self.places`
 

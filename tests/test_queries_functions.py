@@ -85,12 +85,14 @@ class TestDatabaseAndIntegration(unittest.TestCase):
         result = self.app_service.generate_entry(MOCK_LATITUDE, MOCK_LONGITUDE, testing=True)
         self.assertTrue(result, "Failed to insert entry into user_coordinates")
 
-        # Verify the entry exists in the database
-        self.cursor.execute("SELECT * FROM user_coordinates WHERE latitude = %s AND longitude = %s;", 
-                            (MOCK_LATITUDE, MOCK_LONGITUDE))
-        result = self.cursor.fetchone()
-        logging.debug(f"Retrieved entry for verification: {result}")
-        self.assertIsNotNone(result, "No entry found in user_coordinates table for test coordinates")
+        # Use a new connection to verify the entry exists in the database
+        with self.connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM user_coordinates WHERE latitude = %s AND longitude = %s;", 
+                        (MOCK_LATITUDE, MOCK_LONGITUDE))
+            result = cursor.fetchone()
+            logging.debug(f"Verified entry in user_coordinates: {result}")
+            self.assertIsNotNone(result, "No entry found in user_coordinates table for test coordinates")
+
 
 
     def test_rank_nearby_places(self):
@@ -113,10 +115,11 @@ class TestDatabaseAndIntegration(unittest.TestCase):
         self.connection.commit()
 
         # Debug: Confirm data in google_nearby_places after insertion
-        self.cursor.execute("SELECT * FROM google_nearby_places WHERE latitude = %s AND longitude = %s", 
-                            (MOCK_LATITUDE, MOCK_LONGITUDE))
-        inserted_data = self.cursor.fetchall()
-        logging.debug(f"Inserted data for ranking test: {inserted_data}")
+        with self.connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM google_nearby_places WHERE latitude = %s AND longitude = %s", 
+                        (MOCK_LATITUDE, MOCK_LONGITUDE))
+            inserted_data = cursor.fetchall()
+            logging.debug(f"Inserted data for ranking test in google_nearby_places: {inserted_data}")
 
         # Check if ranking works as expected
         ranked_places = self.app_service.rank_nearby_places(MOCK_LATITUDE, MOCK_LONGITUDE, testing=True)
