@@ -2,13 +2,16 @@ import os
 import requests
 import json
 import psycopg2
-from psycopg2.extras import RealDictCursor, pool
+from psycopg2.extras import RealDictCursor
+from psycopg2 import pool 
 import uuid
 from datetime import datetime
 from dotenv import load_dotenv
 import logging
 import pika
+from urllib.parse import urlparse
 from cachetools import TTLCache
+
 
 load_dotenv()
 
