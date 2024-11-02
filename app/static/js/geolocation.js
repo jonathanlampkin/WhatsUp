@@ -1,7 +1,7 @@
 let map, userMarker, directionsService, directionsRenderer;
 const placesList = document.getElementById('places-list');
 
-// Load Google Maps API dynamically with the fetched key
+// Function to load Google Maps API dynamically with the fetched key
 function loadGoogleMapsApi(apiKey) {
     const script = document.createElement('script');
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMap`;
@@ -10,7 +10,7 @@ function loadGoogleMapsApi(apiKey) {
     document.head.appendChild(script);
 }
 
-// Initialize the map and user location
+// Function to initialize the map and user location
 function initMap() {
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(position => {
@@ -35,7 +35,7 @@ function initMap() {
             directionsRenderer = new google.maps.DirectionsRenderer();
             directionsRenderer.setMap(map);
 
-            // Fetch and display nearby places
+            // Fetch nearby places and display them
             fetchNearbyPlaces(userLocation.lat, userLocation.lng);
         }, error => {
             console.error('Geolocation error:', error);
@@ -46,7 +46,8 @@ function initMap() {
     }
 }
 
-// Fetch nearby places from the backend
+
+// Fetch Nearby Places from Backend
 function fetchNearbyPlaces(latitude, longitude) {
     fetch('/process-coordinates', {
         method: 'POST',
@@ -64,11 +65,12 @@ function fetchNearbyPlaces(latitude, longitude) {
     .catch(error => console.error("Error fetching nearby places:", error));
 }
 
-// Display ranked places list and add place markers
+// Display Ranked Places List and Place Markers
+// Display Ranked Places List and Place Markers
 function displayNearbyPlaces(places) {
     placesList.innerHTML = '';  // Clear previous list
-    places.forEach(place => {
-        // Create a card for each place with structured content
+    places.forEach((place, index) => {
+        // Create a list item with structured content
         const listItem = document.createElement('div');
         listItem.className = 'place-item';
 
@@ -91,25 +93,9 @@ function displayNearbyPlaces(places) {
     });
 }
 
-// Highlight selected place on map and show directions
-function highlightPlace(place) {
-    directionsService.route(
-        {
-            origin: userMarker.getPosition(),
-            destination: { lat: place.latitude, lng: place.longitude },
-            travelMode: 'WALKING'
-        },
-        (result, status) => {
-            if (status === 'OK') {
-                directionsRenderer.setDirections(result);
-            } else {
-                console.error('Directions request failed due to ' + status);
-            }
-        }
-    );
-}
 
-// Fetch Google Maps API key and load the map
+
+// Fetch the Google Maps API key, cache it in localStorage, and load the map
 function fetchAndCacheGoogleMapsApiKey() {
     const cachedApiKey = localStorage.getItem("google_maps_api_key");
 
@@ -132,5 +118,5 @@ function fetchAndCacheGoogleMapsApiKey() {
     }
 }
 
-// Start by fetching the API key and initializing the map
+// Fetch the API key and initialize the map
 fetchAndCacheGoogleMapsApiKey();
