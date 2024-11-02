@@ -1,5 +1,3 @@
-# tests/test_rabbitmq.py
-
 import os
 import unittest
 from unittest.mock import patch
@@ -12,46 +10,46 @@ import json
 load_dotenv()
 
 class TestRabbitMQMessaging(unittest.TestCase):
-    def setUp(self):
-        self.rabbitmq_url = os.getenv("RABBITMQ_URL")
-        if not self.rabbitmq_url:
-            self.skipTest("RABBITMQ_URL not set")
-
-        self.connection_params = pika.URLParameters(self.rabbitmq_url)
-        self.connection = pika.BlockingConnection(self.connection_params)
-        self.channel = self.connection.channel()
-        self.queue_name = "test_queue"
+    @classmethod
+    def setUpClass(cls):
+        cls.rabbitmq_url = os.getenv("RABBITMQ_URL")
+        if not cls.rabbitmq_url:
+            raise unittest.SkipTest("RABBITMQ_URL not set in environment variables.")
+        
+        cls.connection_params = pika.URLParameters(cls.rabbitmq_url)
+        cls.connection = pika.BlockingConnection(cls.connection_params)
+        cls.channel = cls.connection.channel()
+        cls.queue_name = "test_queue"
         
         google_api_key = os.getenv("GOOGLE_API_KEY")
-        self.app_service = AppService(google_api_key=google_api_key)
+        cls.app_service = AppService(google_api_key=google_api_key)
         
-        self.channel.queue_declare(queue=self.queue_name)
+        cls.channel.queue_declare(queue=cls.queue_name)
 
-    def tearDown(self):
-        self.channel.queue_delete(queue=self.queue_name)
-        self.connection.close()
+    @classmethod
+    def tearDownClass(cls):
+        cls.channel.queue_delete(queue=cls.queue_name)
+        cls.connection.close()
 
     def test_producer_sends_message(self):
+        """Test that producer sends a message correctly to RabbitMQ queue."""
         message = {"latitude": 40.7128, "longitude": -74.0060}
         send_message(self.queue_name, message)
         
         method_frame, _, body = self.channel.basic_get(self.queue_name, auto_ack=True)
         self.assertIsNotNone(method_frame, "Message not received in queue.")
-        self.assertEqual(json.loads(body), message)
+        self.assertEqual(json.loads(body), message, "Received message does not match expected content.")
 
     @patch.object(AppService, 'process_coordinates')
     def test_consumer_receives_message(self, mock_process_coordinates):
+        """Test that consumer receives and processes message correctly."""
         message = {"latitude": 40.7128, "longitude": -74.0060}
         self.channel.basic_publish(exchange='', routing_key=self.queue_name, body=json.dumps(message))
-        
-        def mock_callback(ch, method, properties, body):
-            coords = json.loads(body)
-            self.assertEqual(coords, message)
-            mock_process_coordinates(coords)
 
         method_frame, _, body = self.channel.basic_get(self.queue_name, auto_ack=True)
-        mock_callback(self.channel, method_frame, None, body)
-
+        coords = json.loads(body)
+        self.assertEqual(coords, message, "Consumer did not receive the correct message.")
+        
         mock_process_coordinates.assert_called_once_with(message)
 
 if __name__ == "__main__":

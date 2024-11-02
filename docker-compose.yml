@@ -12,6 +12,11 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:admin@db:5432/test_db}  # Default to local test database
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - RABBITMQ_URL=${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   db:
     image: postgres:latest
@@ -47,6 +52,8 @@ services:
       - ./data/prometheus:/prometheus
     ports:
       - "9090:9090"
+    depends_on:
+      - app
 
   grafana:
     image: grafana/grafana

@@ -7,3 +7,8 @@ scrape_configs:
     scheme: 'https'
     static_configs:
       - targets: ['whatsup-8df2b91851a0.herokuapp.com']
+    relabel_configs:
+      - source_labels: ['__address__']
+        regex: '(.*)'
+        target_label: 'instance'
+        replacement: 'Heroku_App'
