@@ -7,6 +7,8 @@ from app.services import AppService
 MOCK_LATITUDE = 37.7749
 MOCK_LONGITUDE = -122.4194
 
+# Inside test_queries_functions.py
+
 class TestDatabaseAndIntegration(unittest.TestCase):
     
     @classmethod
@@ -72,6 +74,3 @@ class TestDatabaseAndIntegration(unittest.TestCase):
                 ON CONFLICT (place_id) DO NOTHING
             ''', data)
             self.connection.commit()
-
-if __name__ == "__main__":
-    unittest.main()

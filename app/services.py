@@ -84,7 +84,7 @@ class AppService:
         timestamp = datetime.now().isoformat()
         query = '''
             INSERT INTO user_coordinates (visitor_id, latitude, longitude, timestamp)
-            VALUES (%s, %s, %s, %s) ON CONFLICT (visitor_id) DO NOTHING
+            VALUES (%s, %s, %s, %s) ON CONFLICT (latitude, longitude) DO NOTHING
         '''
         conn = self.get_db_connection()
         try:
@@ -146,12 +146,12 @@ class AppService:
                 logging.debug(f"Inserted place data for {place.get('name')}")
         finally:
             self.release_db_connection(conn)
-
+            
     def rank_nearby_places(self, latitude, longitude):
         """Rank nearby places by rating, proximity, and open status."""
         query = '''
             SELECT name, rating, user_ratings_total, price_level, open_now, 
-                   (ABS(latitude - %s) + ABS(longitude - %s)) AS proximity
+                (ABS(latitude - %s) + ABS(longitude - %s)) AS proximity
             FROM google_nearby_places
             WHERE latitude = %s AND longitude = %s
             ORDER BY open_now DESC, rating DESC, proximity ASC

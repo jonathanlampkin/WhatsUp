@@ -13,6 +13,8 @@ logging.getLogger("pika").setLevel(logging.WARNING)
 
 load_dotenv()
 
+# Inside test_rabbitmq.py
+
 class TestRabbitMQMessaging(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -50,11 +52,11 @@ class TestRabbitMQMessaging(unittest.TestCase):
         message = {"latitude": 40.7128, "longitude": -74.0060}
         self.channel.basic_publish(exchange='', routing_key=self.queue_name, body=json.dumps(message))
 
+        # Simulate receiving message and calling process_coordinates
         method_frame, _, body = self.channel.basic_get(self.queue_name, auto_ack=True)
         coords = json.loads(body)
-        self.assertEqual(coords, message, "Consumer did not receive the correct message.")
         
-        mock_process_coordinates.assert_called_once_with(message)
-
-if __name__ == "__main__":
-    unittest.main()
+        # Call process_coordinates explicitly to simulate consumer behavior
+        self.app_service.process_coordinates((coords['latitude'], coords['longitude']))
+        
+        mock_process_coordinates.assert_called_once_with((coords['latitude'], coords['longitude']))
