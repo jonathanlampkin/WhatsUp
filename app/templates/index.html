@@ -1,14 +1,58 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Location and Nearby Places</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nearby Places</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: auto;
+      padding: 20px;
+    }
+    h2 {
+      text-align: center;
+    }
+    ul {
+      list-style-type: none;
+      padding: 0;
+    }
+    li {
+      margin-bottom: 8px;
+    }
+    .place {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      font-size: 0.95em;
+    }
+    .place strong {
+      font-size: 1.1em;
+    }
+    .place-info {
+      color: #555;
+      font-size: 0.9em;
+    }
+  </style>
 </head>
 <body>
-    <h1>Nearby Places</h1>
-    <ul id="places-list"></ul>
-    <div id="map" style="height: 400px; width: 100%;"></div>
-    <script src="/static/js/geolocation.js"></script>
+
+  <h2>Nearby Places</h2>
+  <ul>
+    {% for place in places %}
+      <li class="place">
+        <strong>{{ place.name }}</strong> — 
+        <span class="place-info">
+          Rating: {{ place.rating }} ⭐ ({{ place.user_ratings_total }} reviews)
+          {% if place.price_level != "N/A" %}
+          — Price Level: {{ place.price_level }}
+          {% endif %}
+          — Open Now: {{ place.open_now }}
+        </span>
+      </li>
+    {% endfor %}
+  </ul>
+
 </body>
 </html>

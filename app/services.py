@@ -153,13 +153,13 @@ class AppService:
             return []
 
     def rank_nearby_places(self, latitude, longitude):
-        """Rank nearby places by rating, proximity, and open status."""
+        """Rank nearby places by open_now, rating, proximity, and user_ratings_total."""
         query = '''
             SELECT name, rating, user_ratings_total, price_level, open_now, 
                 (ABS(latitude - %s) + ABS(longitude - %s)) AS proximity
             FROM google_nearby_places
             WHERE latitude = %s AND longitude = %s
-            ORDER BY open_now DESC, rating DESC, proximity ASC
+            ORDER BY open_now DESC, rating DESC, proximity ASC, user_ratings_total DESC
             LIMIT 10;
         '''
         conn = self.get_db_connection()
@@ -172,8 +172,8 @@ class AppService:
                         "name": row["name"],
                         "rating": row["rating"],
                         "user_ratings_total": row["user_ratings_total"],
-                        "price_level": row["price_level"],
-                        "open_now": row["open_now"]
+                        "price_level": row["price_level"] if row["price_level"] is not None else "N/A",
+                        "open_now": "Yes" if row["open_now"] else "No"
                     }
                     for row in results
                 ]
