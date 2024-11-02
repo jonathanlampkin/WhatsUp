@@ -1,11 +1,15 @@
 import os
 import unittest
+import logging
 from unittest.mock import patch
 from app.messaging.producer import send_message
 from app.services import AppService
 from dotenv import load_dotenv
 import pika
 import json
+
+# Configure logging to reduce verbosity
+logging.getLogger("pika").setLevel(logging.WARNING)
 
 load_dotenv()
 
