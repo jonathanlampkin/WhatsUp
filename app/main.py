@@ -105,6 +105,7 @@ def health_check():
 
 @app.route('/process-coordinates', methods=['POST'])
 def process_coordinates():
+    logging.debug(f"Received request data: {request.json}")
     start_time = time.time()
     data = request.json
     latitude = data.get('latitude')
