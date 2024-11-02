@@ -196,3 +196,5 @@ class AppService:
             logging.error(f"Database error during ranking: {e}")
             self.places = []
             return self.places
+
+# hello
