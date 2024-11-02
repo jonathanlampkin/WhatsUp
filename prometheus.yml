@@ -1,5 +1,5 @@
 scrape_configs:
-  - job_name: 'your_job_name'
+  - job_name: 'metrics'
     metrics_path: '/metrics'
     static_configs:
       - targets: ['https://whatsup-8df2b91851a0.herokuapp.com/']

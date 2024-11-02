@@ -6,12 +6,8 @@ from prometheus_client import Counter, Histogram, generate_latest
 import logging
 import time
 
-# Load environment variables
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")  # API key for secure access
-METRICS_USERNAME = os.getenv("METRICS_USERNAME")
-METRICS_PASSWORD = os.getenv("METRICS_PASSWORD")
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 
@@ -26,14 +22,6 @@ api_call_counter = Counter('google_api_calls_total', 'Total number of Google API
 response_time_histogram = Histogram('response_time_seconds', 'Response time for endpoints', ['endpoint'])
 errors_counter = Counter('errors_total', 'Total number of errors')
 
-
-@app.route('/get-google-maps-key')
-def get_google_maps_key():
-    if not GOOGLE_API_KEY:
-        abort(404)
-    return jsonify({"key": GOOGLE_API_KEY})
-
-
 # Track requests for Prometheus
 @app.before_request
 def before_request():
@@ -46,44 +34,24 @@ def after_request(response):
     response_counter.inc()
     return response
 
-
-# Authentication check for securing /metrics endpoint
-def check_auth(username, password):
-    """Check if a username/password combination is valid."""
-    return username == METRICS_USERNAME and password == METRICS_PASSWORD
-
-def authenticate():
-    """Sends a 401 response that enables basic auth."""
-    return Response(
-        'Could not verify your access level for that URL.\n'
-        'You have to login with proper credentials', 401,
-        {'WWW-Authenticate': 'Basic realm="Login Required"'}
-    )
-
-
-# Secure /metrics endpoint
+# Endpoint for Prometheus metrics
 @app.route('/metrics')
 def metrics():
-    auth = request.authorization
-    if not auth or not check_auth(auth.username, auth.password):
-        return authenticate()
     return Response(generate_latest(), mimetype='text/plain')
-
 
 @app.route('/')
 def index():
     logging.debug("Rendering index.html for user.")
     return render_template('index.html')
 
-
 @app.route('/health', methods=['GET'])
 def health_check():
     db_connected = app_service_instance.check_database_connection()
     api_key_present = bool(app_service_instance.google_api_key)
     
-    # Fetch places and get the count
-    places = app_service_instance.call_google_places_api(latitude=40.7128, longitude=-74.0060)
-    nearby_places_count = len(places)
+    # Fetch places and handle any errors
+    status_code, places = app_service_instance.call_google_places_api(latitude=40.7128, longitude=-74.0060)
+    nearby_places_count = len(places) if status_code == 200 else 0
 
     if db_connected and nearby_places_count > 0:
         return jsonify({
@@ -94,14 +62,13 @@ def health_check():
             "nearby_places_count": nearby_places_count
         }), 200
     else:
-        error_message = "Database error" if not db_connected else "Upload check failed"
+        error_message = "Database error" if not db_connected else "Google Places API error"
         return jsonify({
             "status": "unhealthy",
             "database": "disconnected" if not db_connected else "connected",
             "api_key_present": api_key_present,
             "error": error_message
         }), 500
-
 
 @app.route('/process-coordinates', methods=['POST'])
 def process_coordinates():
@@ -112,8 +79,9 @@ def process_coordinates():
 
     if latitude is None or longitude is None:
         errors_counter.inc()
+        logging.error("Invalid coordinates received.")
         return jsonify({"error": "Invalid coordinates"}), 400
-    
+
     latitude = round(latitude, 4)
     longitude = round(longitude, 4)
 
@@ -121,19 +89,21 @@ def process_coordinates():
     coordinates_saved_counter.inc()
     logging.debug(f"Coordinates saved and sent to RabbitMQ: {latitude}, {longitude}")
     
-    # Use app_service's process_coordinates to handle the full processing pipeline
+    # Process coordinates and handle errors
     places = app_service_instance.process_coordinates((latitude, longitude))
-
     if not places:
         errors_counter.inc()
+        logging.warning(f"No places found for coordinates: {latitude}, {longitude}")
         return jsonify({"error": "No places found"}), 404
 
     response_time_histogram.labels(endpoint='/process-coordinates').observe(time.time() - start_time)
-    
     return jsonify({"places": places}), 200
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     logging.debug("Starting Flask application.")
     port = int(os.getenv("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
