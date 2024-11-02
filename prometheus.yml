@@ -1,8 +1,9 @@
+global:
+  scrape_interval: 15s
+
 scrape_configs:
-  - job_name: 'metrics'
+  - job_name: 'heroku_app'
     metrics_path: '/metrics'
+    scheme: 'https'
     static_configs:
-      - targets: ['https://whatsup-8df2b91851a0.herokuapp.com/']
-    basic_auth:
-      username: 'admin'
-      password: 'admin'
+      - targets: ['whatsup-8df2b91851a0.herokuapp.com']

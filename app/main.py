@@ -61,15 +61,12 @@ def authenticate():
         {'WWW-Authenticate': 'Basic realm="Login Required"'}
     )
 
-# Secure /metrics endpoint
+
 @app.route('/metrics')
 def metrics():
-    auth = request.authorization
-    if not auth or not check_auth(auth.username, auth.password):
-        logging.warning("Unauthorized access attempt to /metrics.")
-        return authenticate()
     logging.debug("Serving /metrics data.")
     return Response(generate_latest(), mimetype='text/plain')
+
 
 @app.route('/')
 def index():
