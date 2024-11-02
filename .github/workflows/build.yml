@@ -60,35 +60,19 @@ jobs:
 
       - name: Wait for RabbitMQ and PostgreSQL to be ready
         run: |
-          for i in {1..12}; do
-            if curl -s http://localhost:15672 | grep 'RabbitMQ Management'; then
-              echo "RabbitMQ is ready."
-              break
-            else
-              echo "Waiting for RabbitMQ..."
-              sleep 5
-            fi
-          done
-          for i in {1..12}; do
-            if pg_isready -h localhost -p 5432 -U postgres; then
-              echo "PostgreSQL is ready."
-              break
-            else
-              echo "Waiting for PostgreSQL..."
-              sleep 5
-            fi
-          done
-        timeout-minutes: 2
+          until curl -I http://localhost:15672 2>&1 | grep -q '200 OK'; do echo "Waiting for RabbitMQ..."; sleep 5; done
+          until pg_isready -h localhost -p 5432 -U postgres; do echo "Waiting for PostgreSQL..."; sleep 5; done
+        timeout-minutes: 5
 
       - name: Initialize the Database
         env:
-          DATABASE_URL: "postgresql://postgres:admin@localhost:5432/test_db"
+          DATABASE_URL: "${{ secrets.TEST_DATABASE_URL }}"  # Use test db for initialization
         run: |
           python app/database/init_db.py
 
-      - name: Run tests
+      - name: Run unit tests
         env:
-          DATABASE_URL: "postgresql://postgres:admin@localhost:5432/test_db"
+          TEST_DATABASE_URL: "${{ secrets.TEST_DATABASE_URL }}"  # Ensure this points to your test db
           RABBITMQ_URL: "amqp://guest:guest@localhost:5672/"
           GOOGLE_API_KEY: "dummy_key"
         run: |
@@ -97,7 +81,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name == 'push'
 
     steps:
       - name: Check out the code
