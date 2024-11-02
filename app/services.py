@@ -153,18 +153,18 @@ class AppService:
             return []
 
     def rank_nearby_places(self, latitude, longitude):
-        """Rank nearby places by open_now, rating, proximity, and user_ratings_total."""
+        """Rank nearby places by rating, proximity, and open status."""
         query = '''
             SELECT name, rating, user_ratings_total, price_level, open_now, 
                 (ABS(latitude - %s) + ABS(longitude - %s)) AS proximity
             FROM google_nearby_places
             WHERE latitude = %s AND longitude = %s
-            ORDER BY open_now DESC, rating DESC, proximity ASC, user_ratings_total DESC
+            ORDER BY open_now DESC, rating DESC, proximity ASC
             LIMIT 10;
         '''
         conn = self.get_db_connection()
         try:
-            with conn.cursor() as cursor:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:  # Ensure RealDictCursor is used here
                 cursor.execute(query, (latitude, longitude, latitude, longitude))
                 results = cursor.fetchall()
                 self.places = [
@@ -172,8 +172,8 @@ class AppService:
                         "name": row["name"],
                         "rating": row["rating"],
                         "user_ratings_total": row["user_ratings_total"],
-                        "price_level": row["price_level"] if row["price_level"] is not None else "N/A",
-                        "open_now": "Yes" if row["open_now"] else "No"
+                        "price_level": row["price_level"],
+                        "open_now": row["open_now"]
                     }
                     for row in results
                 ]
