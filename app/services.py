@@ -84,7 +84,7 @@ class AppService:
         timestamp = datetime.now().isoformat()
         query = '''
             INSERT INTO user_coordinates (visitor_id, latitude, longitude, timestamp)
-            VALUES (%s, %s, %s, %s) ON CONFLICT (latitude, longitude) DO NOTHING
+            VALUES (%s, %s, %s, %s) ON CONFLICT (visitor_id) DO NOTHING
         '''
         conn = self.get_db_connection()
         try:
@@ -92,29 +92,10 @@ class AppService:
                 cursor.execute(query, (visitor_id, latitude, longitude, timestamp))
                 conn.commit()
                 logging.info(f"Inserted user coordinate entry: {visitor_id}")
+        except Exception as e:
+            logging.error(f"Error inserting entry in user_coordinates: {e}")
         finally:
             self.release_db_connection(conn)
-
-    def call_google_places_api(self, latitude, longitude, radius=3000, place_type="point_of_interest"):
-        """Call the Google Places API to fetch nearby places."""
-        url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
-        params = {
-            'location': f"{latitude},{longitude}",
-            'radius': radius,
-            'type': place_type,
-            'key': self.google_api_key
-        }
-        
-        response = requests.get(url, params=params)
-        if response.status_code == 200:
-            google_places = response.json().get('results', [])
-            for place in google_places:
-                self.insert_place_data(latitude, longitude, place)
-            logging.info(f"Fetched and inserted {len(google_places)} places from Google API.")
-            return google_places
-        else:
-            logging.warning(f"Google Places API call failed with status: {response.status_code}")
-            return []
 
     def insert_place_data(self, latitude, longitude, place):
         """Insert a single place entry into the google_nearby_places table."""
@@ -144,9 +125,33 @@ class AppService:
                 cursor.execute(query, data_tuple)
                 conn.commit()
                 logging.debug(f"Inserted place data for {place.get('name')}")
+        except Exception as e:
+            logging.error(f"Error inserting place data: {e}")
         finally:
             self.release_db_connection(conn)
-            
+
+
+    def call_google_places_api(self, latitude, longitude, radius=3000, place_type="point_of_interest"):
+        """Call the Google Places API to fetch nearby places."""
+        url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+        params = {
+            'location': f"{latitude},{longitude}",
+            'radius': radius,
+            'type': place_type,
+            'key': self.google_api_key
+        }
+        
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            google_places = response.json().get('results', [])
+            for place in google_places:
+                self.insert_place_data(latitude, longitude, place)
+            logging.info(f"Fetched and inserted {len(google_places)} places from Google API.")
+            return google_places
+        else:
+            logging.warning(f"Google Places API call failed with status: {response.status_code}")
+            return []
+
     def rank_nearby_places(self, latitude, longitude):
         """Rank nearby places by rating, proximity, and open status."""
         query = '''

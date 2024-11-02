@@ -9,10 +9,8 @@ MOCK_LONGITUDE = -122.4194
 
 # Inside test_queries_functions.py
 
-# test_queries_functions.py
-
 class TestDatabaseAndIntegration(unittest.TestCase):
-
+    
     @classmethod
     def setUpClass(cls):
         test_db_url = os.getenv("DATABASE_URL")
@@ -24,7 +22,6 @@ class TestDatabaseAndIntegration(unittest.TestCase):
         cls.app_service = AppService(google_api_key=os.getenv("GOOGLE_API_KEY"))
 
     def setUp(self):
-        # Ensure a clean database before each test
         self.cleanup_database()
 
     @classmethod
@@ -49,6 +46,7 @@ class TestDatabaseAndIntegration(unittest.TestCase):
                            (MOCK_LATITUDE, MOCK_LONGITUDE))
             db_result = cursor.fetchone()
         
+        logging.debug(f"Database entry for user_coordinates: {db_result}")
         self.assertIsNotNone(db_result, "Entry not found in user_coordinates for test coordinates.")
         self.assertEqual(db_result["latitude"], MOCK_LATITUDE)
         self.assertEqual(db_result["longitude"], MOCK_LONGITUDE)
@@ -61,8 +59,15 @@ class TestDatabaseAndIntegration(unittest.TestCase):
             (MOCK_LATITUDE, MOCK_LONGITUDE, "3", "Place C", "OPERATIONAL", 5.0, 50, "Location C", "['bar']", 3, "icon_c", "color_c", "mask_c", "photo_ref_c", 500, 500, True)
         ]
 
-        # Ensure mock data is inserted
         self.insert_mock_places(mock_data)
+        
+        # Verify that places are indeed inserted
+        with self.connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM google_nearby_places WHERE latitude = %s AND longitude = %s;", 
+                           (MOCK_LATITUDE, MOCK_LONGITUDE))
+            all_places = cursor.fetchall()
+            logging.debug(f"Inserted places in google_nearby_places: {all_places}")
+        
         ranked_places = self.app_service.rank_nearby_places(MOCK_LATITUDE, MOCK_LONGITUDE)
         
         self.assertEqual(len(ranked_places), 3, "Ranking did not retrieve expected number of places")
@@ -81,3 +86,4 @@ class TestDatabaseAndIntegration(unittest.TestCase):
                 ON CONFLICT (place_id) DO NOTHING
             ''', data)
             self.connection.commit()
+        logging.info("Inserted mock places for ranking test.")
