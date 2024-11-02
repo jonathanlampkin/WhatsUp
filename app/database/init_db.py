@@ -26,6 +26,8 @@ def get_db_connection():
     )
     return connection
 
+# init_db.py
+
 def init_db():
     connection = get_db_connection()
     cursor = connection.cursor()
@@ -33,10 +35,11 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_coordinates (
             id SERIAL PRIMARY KEY,
-            visitor_id TEXT UNIQUE,
+            visitor_id TEXT,
             latitude REAL,
             longitude REAL,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(latitude, longitude)  -- Add unique constraint here
         )
     ''')
 
@@ -67,6 +70,7 @@ def init_db():
     cursor.close()
     connection.close()
     print("Database initialized successfully.")
+
 
 if __name__ == "__main__":
     init_db()

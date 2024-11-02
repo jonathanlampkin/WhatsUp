@@ -9,8 +9,10 @@ MOCK_LONGITUDE = -122.4194
 
 # Inside test_queries_functions.py
 
+# test_queries_functions.py
+
 class TestDatabaseAndIntegration(unittest.TestCase):
-    
+
     @classmethod
     def setUpClass(cls):
         test_db_url = os.getenv("DATABASE_URL")
@@ -20,6 +22,10 @@ class TestDatabaseAndIntegration(unittest.TestCase):
         init_db()  # Ensure tables exist
         cls.connection = get_db_connection()
         cls.app_service = AppService(google_api_key=os.getenv("GOOGLE_API_KEY"))
+
+    def setUp(self):
+        # Ensure a clean database before each test
+        self.cleanup_database()
 
     @classmethod
     def tearDownClass(cls):
@@ -55,6 +61,7 @@ class TestDatabaseAndIntegration(unittest.TestCase):
             (MOCK_LATITUDE, MOCK_LONGITUDE, "3", "Place C", "OPERATIONAL", 5.0, 50, "Location C", "['bar']", 3, "icon_c", "color_c", "mask_c", "photo_ref_c", 500, 500, True)
         ]
 
+        # Ensure mock data is inserted
         self.insert_mock_places(mock_data)
         ranked_places = self.app_service.rank_nearby_places(MOCK_LATITUDE, MOCK_LONGITUDE)
         
