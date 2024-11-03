@@ -39,7 +39,6 @@ class RabbitMQProducer:
         try:
             if not self.channel or self.channel.is_closed:
                 self.connect_to_rabbitmq()
-            # Declare queue with durable=True
             self.channel.queue_declare(queue=queue_name, durable=True)
             message_body = json.dumps(message)
             self.channel.basic_publish(exchange='', routing_key=queue_name, body=message_body)

@@ -46,14 +46,23 @@ function fetchNearbyPlaces(latitude, longitude) {
     })
     .then(response => response.json())
     .then(data => {
-        if (data.error) {
+        if (data.status === "processing") {
+            console.log("Processing request. Updates will be received via WebSocket.");
+        } else if (data.error) {
             console.error("Error fetching nearby places:", data.error);
-        } else {
-            displayNearbyPlaces(data.places);
         }
     })
     .catch(error => console.error("Error fetching nearby places:", error));
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    const socket = io.connect(window.location.origin);
+
+    socket.on('update', (data) => {
+        const { latitude, longitude, places } = data;
+        displayNearbyPlaces(places);
+    });
+});
 
 function displayNearbyPlaces(places) {
     placesList.innerHTML = '';

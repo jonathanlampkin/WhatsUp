@@ -1,4 +1,5 @@
 from flask import Flask, request, render_template, jsonify, Response
+from flask_socketio import SocketIO
 import os
 from dotenv import load_dotenv
 from app.services import AppService
@@ -11,6 +12,7 @@ load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
+socketio = SocketIO(app, message_queue=os.getenv("RABBITMQ_URL"))  # Enable message queuing with RabbitMQ
 app_service_instance = AppService(google_api_key=GOOGLE_API_KEY)
 
 # Prometheus metrics
@@ -69,20 +71,21 @@ def health_check():
 
 @app.route('/process-coordinates', methods=['POST'])
 def process_coordinates():
-    start_time = time.time()
     data = request.json
-    latitude = data.get('latitude')
-    longitude = data.get('longitude')
-    if latitude is None or longitude is None:
-        increment_metric("errors_counter")
-        return jsonify({"error": "Invalid coordinates"}), 400
-    latitude, longitude = round(latitude, 4), round(longitude, 4)
+    latitude = round(data.get('latitude', 0), 4)
+    longitude = round(data.get('longitude', 0), 4)
     app_service_instance.send_coordinates_if_not_cached(latitude, longitude)
-    increment_metric("coordinates_saved_counter")
-    places = app_service_instance.process_coordinates(latitude, longitude)
-    record_response_time('/process-coordinates', start_time)
-    return jsonify({"places": places}), 200
+    return jsonify({"status": "processing"}), 202
+
+# WebSocket event for real-time updates
+@socketio.on('connect')
+def on_connect():
+    logging.info("Client connected for WebSocket updates.")
+
+@socketio.on('disconnect')
+def on_disconnect():
+    logging.info("Client disconnected.")
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    socketio.run(app, host="0.0.0.0", port=port)
