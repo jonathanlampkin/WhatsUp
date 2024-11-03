@@ -1,8 +1,16 @@
 import unittest
 import os
+import logging
 from app.database.init_db import init_db, get_db_connection
 from app.services import AppService
 from unittest.mock import patch
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 
 MOCK_LATITUDE = 37.7749
 MOCK_LONGITUDE = -122.4194
@@ -11,6 +19,7 @@ class TestQueriesFunctions(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # Ensure environment variables are loaded
         test_db_url = os.getenv("DATABASE_URL")
         if not test_db_url:
             raise EnvironmentError("DATABASE_URL for testing is not set in environment variables.")
@@ -18,11 +27,13 @@ class TestQueriesFunctions(unittest.TestCase):
         init_db()  # Ensure tables exist
         cls.connection = get_db_connection()
         cls.app_service = AppService(google_api_key=os.getenv("GOOGLE_API_KEY"))
+        logging.info("Database and AppService initialized for testing.")
 
     @classmethod
     def tearDownClass(cls):
         cls.cleanup_database()
         cls.connection.close()
+        logging.info("Database connection closed after tests.")
 
     @classmethod
     def cleanup_database(cls):
@@ -31,6 +42,7 @@ class TestQueriesFunctions(unittest.TestCase):
             cursor.execute("DELETE FROM user_coordinates;")
             cursor.execute("DELETE FROM google_nearby_places;")
             cls.connection.commit()
+        logging.info("Test data cleared from database.")
 
     @unittest.skip("Skipping test_generate_entry temporarily")
     def test_generate_entry(self):
@@ -74,6 +86,7 @@ class TestQueriesFunctions(unittest.TestCase):
                 ON CONFLICT (place_id) DO NOTHING
             ''', data)
             self.connection.commit()
+        logging.info("Inserted mock data for testing ranking.")
 
     # Test for Cache Management in AppService
     def test_cache_management(self):

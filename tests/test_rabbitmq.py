@@ -2,18 +2,17 @@ import os
 import unittest
 import logging
 from unittest.mock import patch
-from app.messaging.producer import send_message
+from app.messaging.producer import RabbitMQProducer
 from app.services import AppService
 from dotenv import load_dotenv
 import pika
 import json
 
-# Configure logging to reduce verbosity
-logging.getLogger("pika").setLevel(logging.WARNING)
-
+# Load environment variables
 load_dotenv()
 
-# Inside test_rabbitmq.py
+# Set up logging to reduce verbosity
+logging.getLogger("pika").setLevel(logging.WARNING)
 
 class TestRabbitMQMessaging(unittest.TestCase):
     @classmethod
@@ -31,20 +30,25 @@ class TestRabbitMQMessaging(unittest.TestCase):
         cls.app_service = AppService(google_api_key=google_api_key)
         
         cls.channel.queue_declare(queue=cls.queue_name)
+        logging.info("Connected to RabbitMQ for tests.")
 
     @classmethod
     def tearDownClass(cls):
         cls.channel.queue_delete(queue=cls.queue_name)
         cls.connection.close()
+        logging.info("RabbitMQ connection closed after tests.")
 
     def test_producer_sends_message(self):
         """Test that producer sends a message correctly to RabbitMQ queue."""
+        producer = RabbitMQProducer(self.rabbitmq_url)
         message = {"latitude": 40.7128, "longitude": -74.0060}
-        send_message(self.queue_name, message)
         
+        producer.send_message(self.queue_name, message)
         method_frame, _, body = self.channel.basic_get(self.queue_name, auto_ack=True)
+
         self.assertIsNotNone(method_frame, "Message not received in queue.")
         self.assertEqual(json.loads(body), message, "Received message does not match expected content.")
+        producer.close()
 
     @patch.object(AppService, 'process_coordinates')
     def test_consumer_receives_message(self, mock_process_coordinates):
@@ -60,3 +64,6 @@ class TestRabbitMQMessaging(unittest.TestCase):
         self.app_service.process_coordinates((coords['latitude'], coords['longitude']))
         
         mock_process_coordinates.assert_called_once_with((coords['latitude'], coords['longitude']))
+
+if __name__ == "__main__":
+    unittest.main()
