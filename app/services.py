@@ -136,4 +136,36 @@ class AppService:
         finally:
             self.db_pool.putconn(conn)
 
-# triggering github actions
+
+    def rank_nearby_places(self, latitude, longitude):
+        """
+        Retrieves and ranks nearby places from the database based on various criteria:
+        open status, rating, proximity, etc.
+        """
+        query = '''
+            SELECT name, rating, user_ratings_total, price_level, open_now, 
+                (ABS(latitude - %s) + ABS(longitude - %s)) AS proximity
+            FROM google_nearby_places
+            WHERE latitude = %s AND longitude = %s
+            ORDER BY open_now DESC, rating DESC, proximity ASC, user_ratings_total DESC
+            LIMIT 10;
+        '''
+        conn = self.db_pool.getconn()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(query, (latitude, longitude, latitude, longitude))
+                results = cursor.fetchall()
+                ranked_places = [
+                    {
+                        "name": row["name"],
+                        "rating": row["rating"],
+                        "user_ratings_total": row["user_ratings_total"],
+                        "price_level": row["price_level"],
+                        "open_now": row["open_now"]
+                    }
+                    for row in results
+                ]
+                logging.debug(f"Ranked places: {ranked_places}")
+                return ranked_places
+        finally:
+            self.db_pool.putconn(conn)
