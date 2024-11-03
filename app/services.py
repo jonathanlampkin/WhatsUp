@@ -151,11 +151,11 @@ class AppService:
         open status, rating, proximity, and user rating count.
         """
         query = '''
-            SELECT name, rating, user_ratings_total, price_level, open_now, 
+            SELECT name, rating, user_ratings_total, price_level, open_now, (rating * user_ratings_total) AS rating_power
                 (ABS(latitude - %s) + ABS(longitude - %s)) AS proximity
             FROM google_nearby_places
             WHERE latitude = %s AND longitude = %s
-            ORDER BY open_now DESC NULLS LAST, rating DESC, proximity ASC, user_ratings_total DESC
+            ORDER BY open_now DESC NULLS LAST, rating_power ASC, proximity ASC, 
             LIMIT 10;
         '''
         conn = self.db_pool.getconn()
