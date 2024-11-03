@@ -6,13 +6,15 @@ from app.services import AppService
 from prometheus_client import Counter, Histogram, generate_latest
 import logging
 import time
+import json
 
 # Load environment variables
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+RABBITMQ_URL = os.getenv("RABBITMQ_URL")
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
-socketio = SocketIO(app, message_queue=os.getenv("RABBITMQ_URL"))  # Enable message queuing with RabbitMQ
+socketio = SocketIO(app, message_queue=RABBITMQ_URL, async_mode='eventlet')  # Enable message queuing with RabbitMQ
 app_service_instance = AppService(google_api_key=GOOGLE_API_KEY)
 
 # Prometheus metrics
@@ -56,7 +58,7 @@ def metrics_endpoint():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', google_maps_api_key=GOOGLE_API_KEY)
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -71,13 +73,19 @@ def health_check():
 
 @app.route('/process-coordinates', methods=['POST'])
 def process_coordinates():
+    start_time = time.time()
     data = request.json
     latitude = round(data.get('latitude', 0), 4)
     longitude = round(data.get('longitude', 0), 4)
+
+    # Send coordinates to AppService for processing
     app_service_instance.send_coordinates_if_not_cached(latitude, longitude)
+    increment_metric("coordinates_saved_counter")
+    record_response_time('/process-coordinates', start_time)
+
     return jsonify({"status": "processing"}), 202
 
-# WebSocket event for real-time updates
+# WebSocket events for real-time updates
 @socketio.on('connect')
 def on_connect():
     logging.info("Client connected for WebSocket updates.")
@@ -85,6 +93,34 @@ def on_connect():
 @socketio.on('disconnect')
 def on_disconnect():
     logging.info("Client disconnected.")
+
+def send_updates(data):
+    # Emit data to clients via WebSocket
+    socketio.emit('update', data)
+
+def start_rabbitmq_consumer():
+    """
+    Starts a background task to consume messages from RabbitMQ and
+    emit real-time updates to WebSocket clients.
+    """
+    def consume():
+        import pika
+        connection = pika.BlockingConnection(pika.URLParameters(RABBITMQ_URL))
+        channel = connection.channel()
+        channel.queue_declare(queue='coordinates_queue', durable=True)
+
+        def callback(ch, method, properties, body):
+            data = json.loads(body)
+            send_updates(data)  # Emit data to WebSocket clients
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+
+        channel.basic_consume(queue='coordinates_queue', on_message_callback=callback)
+        channel.start_consuming()
+
+    socketio.start_background_task(consume)
+
+# Start the RabbitMQ consumer in a background task
+start_rabbitmq_consumer()
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
