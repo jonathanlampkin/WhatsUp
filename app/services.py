@@ -155,7 +155,7 @@ class AppService:
                 (ABS(latitude - %s) + ABS(longitude - %s)) AS proximity
             FROM google_nearby_places
             WHERE latitude = %s AND longitude = %s
-            ORDER BY open_now DESC NULLS LAST, rating DESC, user_ratings_total DESC, proximity ASC, 
+            ORDER BY open_now DESC NULLS LAST, rating DESC, proximity ASC, user_ratings_total DESC
             LIMIT 10;
         '''
         conn = self.db_pool.getconn()
