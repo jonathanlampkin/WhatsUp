@@ -26,27 +26,24 @@ class AppService:
         self.db_pool = pool.SimpleConnectionPool(1, 10, dsn=os.getenv("DATABASE_URL"))
         self.cache = TTLCache(maxsize=100, ttl=600)  # Cache up to 100 coordinates for 10 minutes
         
-        # Set up persistent RabbitMQ connection with error handling
-        self.rabbitmq_params = pika.URLParameters(os.getenv("RABBITMQ_URL"))
+        # Set up RabbitMQ parameters with a fallback URL
+        rabbitmq_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
+        self.rabbitmq_params = pika.URLParameters(rabbitmq_url)
+        
         self.rabbitmq_connection = None
         self.rabbitmq_channel = None
         self.connect_to_rabbitmq()
 
-    def connect_to_rabbitmq(self):
-        """Establish a connection to RabbitMQ with retry logic."""
-        max_retries = 5
+    def connect_to_rabbitmq(self, max_retries=5, delay=2):
         for attempt in range(max_retries):
             try:
                 self.rabbitmq_connection = pika.BlockingConnection(self.rabbitmq_params)
                 self.rabbitmq_channel = self.rabbitmq_connection.channel()
-                self.rabbitmq_channel.queue_declare(queue="coordinates_queue")
-                logging.info("Successfully connected to RabbitMQ")
+                logging.info("Connected to RabbitMQ.")
                 return
             except pika.exceptions.AMQPConnectionError as e:
-                logging.error(f"RabbitMQ connection failed on attempt {attempt + 1}: {e}")
-                if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
-        raise Exception("Failed to connect to RabbitMQ after multiple attempts.")
+                logging.error(f"RabbitMQ connection attempt {attempt + 1} failed: {e}")
+                time.sleep(delay)
 
     # 1. Check if coordinates are cached
     def is_coordinates_cached(self, latitude, longitude):
