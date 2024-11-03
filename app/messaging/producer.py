@@ -3,7 +3,7 @@ import pika
 import json
 import logging
 from dotenv import load_dotenv
-from services import AppService
+from app.services import AppService
 import time
 
 # Load environment variables
