@@ -120,3 +120,5 @@ class AppService:
                 conn.commit()
         finally:
             self.db_pool.putconn(conn)
+
+# triggering github actions
