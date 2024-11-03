@@ -131,7 +131,7 @@ class AppService:
             self.release_db_connection(conn)
 
 
-    def call_google_places_api(self, latitude, longitude, radius=3000, place_type="point_of_interest"):
+    def call_google_places_api(self, latitude, longitude, radius=5000, place_type="restaurant"):
         """Call the Google Places API to fetch nearby places."""
         url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
         params = {
