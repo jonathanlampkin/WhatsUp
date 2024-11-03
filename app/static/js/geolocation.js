@@ -55,6 +55,7 @@ function fetchNearbyPlaces(latitude, longitude) {
     .catch(error => console.error("Error fetching nearby places:", error));
 }
 
+// Set up WebSocket connection and listen for updates
 document.addEventListener('DOMContentLoaded', () => {
     const socket = io.connect(window.location.origin);
 
