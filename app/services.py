@@ -133,7 +133,7 @@ class AppService:
             self.release_db_connection(conn)
 
     # Consumer functionality: Process coordinates from RabbitMQ
-    def process_coordinates_message(self, latitude, longitude):
+    def process_coordinates(self, latitude, longitude):
         """Process coordinates by checking the database and fetching from Google if needed."""
         if self.check_coordinates_in_db(latitude, longitude):
             logging.info(f"Coordinates ({latitude}, {longitude}) found in database.")
