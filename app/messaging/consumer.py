@@ -19,7 +19,11 @@ def connect_to_rabbitmq():
     retries = 3
     for i in range(retries):
         try:
-            return pika.BlockingConnection(connection_params)
+            connection = pika.BlockingConnection(connection_params)
+            channel = connection.channel()
+            # Declare the queue with durable=True
+            channel.queue_declare(queue="coordinates_queue", durable=True)
+            return connection, channel
         except pika.exceptions.AMQPConnectionError as e:
             logging.error(f"Connection attempt {i+1} failed: {e}")
             time.sleep(5)
@@ -36,18 +40,16 @@ def process_message(ch, method, properties, body):
         logging.error("Error processing message: %s", e)
 
 def start_consumer():
-    connection = connect_to_rabbitmq()
-    channel = connection.channel()
-    channel.queue_declare(queue="coordinates_queue", durable=True)
+    connection, channel = connect_to_rabbitmq()
     channel.basic_consume(queue="coordinates_queue", on_message_callback=process_message, auto_ack=True)
     logging.info("Waiting for messages.")
     while True:
         try:
             channel.start_consuming()
-        except pika.exceptions.AMQPConnectionError as e:
+        except pika.exceptions.AMQPConnectionError:
             logging.error("Lost connection to RabbitMQ. Reconnecting...")
             time.sleep(5)
-            channel = connect_to_rabbitmq().channel()
+            connection, channel = connect_to_rabbitmq()
 
 if __name__ == "__main__":
     start_consumer()

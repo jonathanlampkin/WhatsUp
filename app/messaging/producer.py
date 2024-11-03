@@ -20,11 +20,12 @@ class RabbitMQProducer:
         self.connect_to_rabbitmq()
 
     def connect_to_rabbitmq(self, max_retries=5, delay=2):
-        """Establish a connection to RabbitMQ with retry logic and handle connection closure on failure."""
         for attempt in range(max_retries):
             try:
                 self.connection = pika.BlockingConnection(self.connection_params)
                 self.channel = self.connection.channel()
+                # Declare queue as durable to ensure consistency
+                self.channel.queue_declare(queue="coordinates_queue", durable=True)
                 logging.info("Connected to RabbitMQ.")
                 return
             except pika.exceptions.AMQPConnectionError as e:
@@ -35,7 +36,6 @@ class RabbitMQProducer:
         raise RuntimeError("Could not establish RabbitMQ connection after multiple attempts")
 
     def send_message(self, queue_name, message):
-        """Send a message to the specified queue with retry if publishing fails."""
         try:
             if not self.channel or self.channel.is_closed:
                 self.connect_to_rabbitmq()
@@ -46,7 +46,7 @@ class RabbitMQProducer:
             logging.info(f"Sent '{message_body}' to {queue_name}")
         except Exception as e:
             logging.error(f"Failed to send message to RabbitMQ: {e}")
-            self.connect_to_rabbitmq()  # Retry connection on failure
+            self.connect_to_rabbitmq()
 
     def close(self):
         if self.connection and self.connection.is_open:
