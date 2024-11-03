@@ -81,19 +81,19 @@ jobs:
           python -m unittest discover -s tests -v
 
   deploy:
-    runs-on: ubuntu-latest
     needs: build
+    runs-on: ubuntu-latest
 
     steps:
       - name: Check out the code
         uses: actions/checkout@v2
 
       - name: Log in to Heroku Container Registry
-        run: |
-          echo "$HEROKU_API_KEY" | docker login --username="$HEROKU_USERNAME" --password-stdin registry.heroku.com
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
           HEROKU_USERNAME: ${{ secrets.HEROKU_USERNAME }}
+        run: |
+          echo "$HEROKU_API_KEY" | docker login --username="$HEROKU_USERNAME" --password-stdin registry.heroku.com
 
       - name: Build Docker container
         run: docker build -t registry.heroku.com/${{ secrets.HEROKU_APP_NAME }}/web .
