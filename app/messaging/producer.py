@@ -3,51 +3,56 @@ import pika
 import json
 import logging
 from dotenv import load_dotenv
-from app.services import AppService
 import time
 
 # Load environment variables
 load_dotenv()
 RABBITMQ_URL = os.getenv("RABBITMQ_URL")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-app_service = AppService(google_api_key=GOOGLE_API_KEY)
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 
-def connect_to_rabbitmq():
-    connection_params = pika.URLParameters(RABBITMQ_URL)
-    retries = 3
-    for i in range(retries):
-        try:
-            return pika.BlockingConnection(connection_params)
-        except pika.exceptions.AMQPConnectionError as e:
-            logging.error(f"Connection attempt {i+1} failed: {e}")
-            time.sleep(5)
-    raise RuntimeError("Could not connect to RabbitMQ")
+class RabbitMQProducer:
+    def __init__(self, rabbitmq_url):
+        self.connection_params = pika.URLParameters(rabbitmq_url)
+        self.connection = None
+        self.channel = None
+        self.connect_to_rabbitmq()
 
-def process_message(ch, method, properties, body):
-    try:
-        coords = json.loads(body)
-        latitude = coords['latitude']
-        longitude = coords['longitude']
-        logging.info("Received coordinates %s, %s", latitude, longitude)
-        app_service.process_coordinates(latitude, longitude)
-    except Exception as e:
-        logging.error("Error processing message: %s", e)
+    def connect_to_rabbitmq(self, max_retries=5, delay=2):
+        """Establish a connection to RabbitMQ with retry logic and handle connection closure on failure."""
+        for attempt in range(max_retries):
+            try:
+                self.connection = pika.BlockingConnection(self.connection_params)
+                self.channel = self.connection.channel()
+                logging.info("Connected to RabbitMQ.")
+                return
+            except pika.exceptions.AMQPConnectionError as e:
+                logging.error(f"RabbitMQ connection attempt {attempt + 1} failed: {e}")
+                time.sleep(delay)
+                if self.connection and self.connection.is_open:
+                    self.connection.close()
+        raise RuntimeError("Could not establish RabbitMQ connection after multiple attempts")
 
-def start_consumer():
-    connection = connect_to_rabbitmq()
-    channel = connection.channel()
-    channel.queue_declare(queue="coordinates_queue", durable=True)
-    channel.basic_consume(queue="coordinates_queue", on_message_callback=process_message, auto_ack=True)
-    logging.info("Waiting for messages.")
-    while True:
+    def send_message(self, queue_name, message):
+        """Send a message to the specified queue with retry if publishing fails."""
         try:
-            channel.start_consuming()
-        except pika.exceptions.AMQPConnectionError as e:
-            logging.error("Lost connection to RabbitMQ. Reconnecting...")
-            time.sleep(5)
-            channel = connect_to_rabbitmq().channel()
+            if not self.channel or self.channel.is_closed:
+                self.connect_to_rabbitmq()
+            self.channel.queue_declare(queue=queue_name, durable=True)  # Declare queue as durable if it is persistent
+            message_body = json.dumps(message)
+            self.channel.basic_publish(exchange='', routing_key=queue_name, body=message_body)
+            logging.info(f"Sent '{message_body}' to {queue_name}")
+        except Exception as e:
+            logging.error(f"Failed to send message to RabbitMQ: {e}")
+            self.connect_to_rabbitmq()  # Retry connection on failure
+
+    def close(self):
+        if self.connection and self.connection.is_open:
+            self.connection.close()
+            logging.info("RabbitMQ connection closed.")
+
 
 if __name__ == "__main__":
-    start_consumer()
+    producer = RabbitMQProducer(RABBITMQ_URL)
+    producer.close()
