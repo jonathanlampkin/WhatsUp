@@ -94,7 +94,7 @@ class AppService:
             places = self.fetch_from_google_places_api(latitude, longitude)
             if places:
                 self.store_places_in_db_and_cache(latitude, longitude, places)
-            return places
+            return self.rank_nearby_places(latitude, longitude)
 
     def fetch_from_google_places_api(self, latitude, longitude, radius=5000, place_type="restaurant"):
         url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
@@ -140,14 +140,14 @@ class AppService:
     def rank_nearby_places(self, latitude, longitude):
         """
         Retrieves and ranks nearby places from the database based on various criteria:
-        open status, rating, proximity, etc.
+        open status, rating, proximity, and user rating count.
         """
         query = '''
             SELECT name, rating, user_ratings_total, price_level, open_now, 
                 (ABS(latitude - %s) + ABS(longitude - %s)) AS proximity
             FROM google_nearby_places
             WHERE latitude = %s AND longitude = %s
-            ORDER BY open_now DESC, rating DESC, proximity ASC, user_ratings_total DESC
+            ORDER BY open_now DESC NULLS LAST, rating DESC, proximity ASC, user_ratings_total DESC
             LIMIT 10;
         '''
         conn = self.db_pool.getconn()
