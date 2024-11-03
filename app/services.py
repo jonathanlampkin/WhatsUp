@@ -3,7 +3,7 @@ import requests
 import json
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from psycopg2 import pool 
+from psycopg2 import pool
 import uuid
 from datetime import datetime
 from dotenv import load_dotenv
@@ -11,7 +11,9 @@ import logging
 import pika
 from urllib.parse import urlparse
 from cachetools import TTLCache
-
+from urllib3.util.retry import Retry  # Updated import
+from requests.adapters import HTTPAdapter
+import time
 
 load_dotenv()
 
@@ -21,84 +23,89 @@ logging.basicConfig(level=logging.DEBUG)
 class AppService:
     def __init__(self, google_api_key=None):
         self.google_api_key = google_api_key
-        self.places = []
-        self.db_pool = pool.SimpleConnectionPool(1, 20, dsn=os.getenv("DATABASE_URL"))
+        self.db_pool = pool.SimpleConnectionPool(1, 10, dsn=os.getenv("DATABASE_URL"))
         self.cache = TTLCache(maxsize=100, ttl=600)  # Cache up to 100 coordinates for 10 minutes
         
-        # Set up persistent RabbitMQ connection
+        # Set up persistent RabbitMQ connection with error handling
         self.rabbitmq_params = pika.URLParameters(os.getenv("RABBITMQ_URL"))
-        self.rabbitmq_connection = pika.BlockingConnection(self.rabbitmq_params)
-        self.rabbitmq_channel = self.rabbitmq_connection.channel()
-        self.rabbitmq_channel.queue_declare(queue="coordinates_queue")
+        self.rabbitmq_connection = None
+        self.rabbitmq_channel = None
+        self.connect_to_rabbitmq()
 
-    def send_coordinates(self, latitude, longitude):
-        """Send coordinates to RabbitMQ."""
-        message = json.dumps({"latitude": latitude, "longitude": longitude})
-        self.rabbitmq_channel.basic_publish(exchange='', routing_key="coordinates_queue", body=message)
-        logging.info(f"Sent {message} to RabbitMQ")
+    def connect_to_rabbitmq(self):
+        """Establish a connection to RabbitMQ with retry logic."""
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                self.rabbitmq_connection = pika.BlockingConnection(self.rabbitmq_params)
+                self.rabbitmq_channel = self.rabbitmq_connection.channel()
+                self.rabbitmq_channel.queue_declare(queue="coordinates_queue")
+                logging.info("Successfully connected to RabbitMQ")
+                return
+            except pika.exceptions.AMQPConnectionError as e:
+                logging.error(f"RabbitMQ connection failed on attempt {attempt + 1}: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+        raise Exception("Failed to connect to RabbitMQ after multiple attempts.")
 
-    def process_coordinates(self, coords):
-        latitude, longitude = coords
+    # 1. Check if coordinates are cached
+    def is_coordinates_cached(self, latitude, longitude):
         cache_key = f"{latitude}_{longitude}"
-        
-        # Check cache before proceeding
-        if cache_key in self.cache:
-            logging.info("Using cached result.")
-            return self.cache[cache_key]
-        
-        # Generate entry and check for existing places
-        self.generate_entry(latitude, longitude)
-        if self.check_existing_places(latitude, longitude):
-            places = self.rank_nearby_places(latitude, longitude)
-        else:
-            places = self.call_google_places_api(latitude, longitude)
-        
-        # Cache the result
-        self.cache[cache_key] = places
-        return places
+        return self.cache.get(cache_key)
 
-    def get_db_connection(self):
-        """Get a database connection from the pool."""
-        return self.db_pool.getconn()
+    # 2. Send coordinates to RabbitMQ if not cached
+    def send_coordinates_if_not_cached(self, latitude, longitude):
+        if not self.is_coordinates_cached(latitude, longitude):
+            message = json.dumps({"latitude": latitude, "longitude": longitude})
+            self.rabbitmq_channel.basic_publish(exchange='', routing_key="coordinates_queue", body=message)
+            logging.info(f"Sent {message} to RabbitMQ")
 
-    def release_db_connection(self, conn):
-        """Release a database connection back to the pool."""
-        self.db_pool.putconn(conn)
-
-    def check_existing_places(self, latitude, longitude):
-        """Check if places already exist in the database for given coordinates."""
+    # 3. Check if coordinates exist in the database
+    def check_coordinates_in_db(self, latitude, longitude):
         query = "SELECT 1 FROM google_nearby_places WHERE latitude = %s AND longitude = %s"
         conn = self.get_db_connection()
         try:
             with conn.cursor() as cursor:
                 cursor.execute(query, (latitude, longitude))
                 exists = cursor.fetchone() is not None
-                logging.debug(f"Checked existing places for ({latitude}, {longitude}): {'Found' if exists else 'Not found'}")
+                logging.debug(f"Checked database for ({latitude}, {longitude}): {'Found' if exists else 'Not found'}")
                 return exists
         finally:
             self.release_db_connection(conn)
 
-    def generate_entry(self, latitude, longitude):
-        """Generate a unique visitor entry in the user_coordinates table."""
-        visitor_id = str(uuid.uuid4())
-        timestamp = datetime.now().isoformat()
-        query = '''
-            INSERT INTO user_coordinates (visitor_id, latitude, longitude, timestamp)
-            VALUES (%s, %s, %s, %s) ON CONFLICT (visitor_id) DO NOTHING
-        '''
-        conn = self.get_db_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(query, (visitor_id, latitude, longitude, timestamp))
-                conn.commit()
-                logging.info(f"Inserted user coordinate entry: {visitor_id}")
-        except Exception as e:
-            logging.error(f"Error inserting entry in user_coordinates: {e}")
-        finally:
-            self.release_db_connection(conn)
+    # 4. Call Google Places API with retry
+    def fetch_from_google_places_api(self, latitude, longitude, radius=5000, place_type="restaurant"):
+        url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+        params = {
+            'location': f"{latitude},{longitude}",
+            'radius': radius,
+            'type': place_type,
+            'key': self.google_api_key
+        }
+        
+        session = requests.Session()
+        retries = Retry(total=3, backoff_factor=0.3, status_forcelist=[500, 502, 503, 504])
+        session.mount("https://", HTTPAdapter(max_retries=retries))
+        
+        response = session.get(url, params=params)
+        if response.status_code == 200:
+            google_places = response.json().get('results', [])
+            logging.info(f"Fetched {len(google_places)} places from Google API.")
+            return google_places
+        else:
+            logging.warning(f"Google Places API call failed with status: {response.status_code}")
+            return []
 
+    # 5. Store API results in the database and cache
+    def store_places_in_db_and_cache(self, latitude, longitude, places):
+        for place in places:
+            self.insert_place_data(latitude, longitude, place)
+        
+        cache_key = f"{latitude}_{longitude}"
+        self.cache[cache_key] = places
+
+    # Helper method: Insert a single place entry into the database
     def insert_place_data(self, latitude, longitude, place):
-        """Insert a single place entry into the google_nearby_places table."""
         photo_data = place['photos'][0] if 'photos' in place and place['photos'] else None
         data_tuple = (
             latitude, longitude, place.get("place_id"), place.get("name"),
@@ -125,35 +132,32 @@ class AppService:
                 cursor.execute(query, data_tuple)
                 conn.commit()
                 logging.debug(f"Inserted place data for {place.get('name')}")
-        except Exception as e:
-            logging.error(f"Error inserting place data: {e}")
         finally:
             self.release_db_connection(conn)
 
-
-    def call_google_places_api(self, latitude, longitude, radius=5000, place_type="restaurant"):
-        """Call the Google Places API to fetch nearby places."""
-        url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
-        params = {
-            'location': f"{latitude},{longitude}",
-            'radius': radius,
-            'type': place_type,
-            'key': self.google_api_key
-        }
-        
-        response = requests.get(url, params=params)
-        if response.status_code == 200:
-            google_places = response.json().get('results', [])
-            for place in google_places:
-                self.insert_place_data(latitude, longitude, place)
-            logging.info(f"Fetched and inserted {len(google_places)} places from Google API.")
-            return google_places
+    # Consumer functionality: Process coordinates from RabbitMQ
+    def process_coordinates_message(self, latitude, longitude):
+        """Process coordinates by checking the database and fetching from Google if needed."""
+        if self.check_coordinates_in_db(latitude, longitude):
+            logging.info(f"Coordinates ({latitude}, {longitude}) found in database.")
+            return self.rank_nearby_places(latitude, longitude)
         else:
-            logging.warning(f"Google Places API call failed with status: {response.status_code}")
-            return []
+            places = self.fetch_from_google_places_api(latitude, longitude)
+            if places:
+                self.store_places_in_db_and_cache(latitude, longitude, places)
+            return places
 
+    # Additional database-related helper methods
+    def get_db_connection(self):
+        """Get a database connection from the pool."""
+        return self.db_pool.getconn()
+
+    def release_db_connection(self, conn):
+        """Release a database connection back to the pool."""
+        self.db_pool.putconn(conn)
+
+    # Rank places by proximity and other criteria
     def rank_nearby_places(self, latitude, longitude):
-        """Rank nearby places by rating, proximity, and open status."""
         query = '''
             SELECT name, rating, user_ratings_total, price_level, open_now, 
                 (ABS(latitude - %s) + ABS(longitude - %s)) AS proximity
@@ -164,7 +168,7 @@ class AppService:
         '''
         conn = self.get_db_connection()
         try:
-            with conn.cursor(cursor_factory=RealDictCursor) as cursor:  # Ensure RealDictCursor is used here
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
                 cursor.execute(query, (latitude, longitude, latitude, longitude))
                 results = cursor.fetchall()
                 self.places = [

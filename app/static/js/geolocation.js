@@ -1,7 +1,6 @@
-let map, userMarker, directionsService, directionsRenderer;
+let map, userMarker;
 const placesList = document.getElementById('places-list');
 
-// Function to load Google Maps API dynamically with the fetched key
 function loadGoogleMapsApi(apiKey) {
     const script = document.createElement('script');
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMap`;
@@ -10,7 +9,6 @@ function loadGoogleMapsApi(apiKey) {
     document.head.appendChild(script);
 }
 
-// Function to initialize the map and user location
 function initMap() {
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(position => {
@@ -19,7 +17,6 @@ function initMap() {
                 lng: position.coords.longitude
             };
 
-            // Initialize the map centered at user location
             map = new google.maps.Map(document.getElementById("map"), {
                 center: userLocation,
                 zoom: 15,
@@ -31,11 +28,6 @@ function initMap() {
                 title: "Your Location",
             });
 
-            directionsService = new google.maps.DirectionsService();
-            directionsRenderer = new google.maps.DirectionsRenderer();
-            directionsRenderer.setMap(map);
-
-            // Fetch nearby places and display them
             fetchNearbyPlaces(userLocation.lat, userLocation.lng);
         }, error => {
             console.error('Geolocation error:', error);
@@ -46,8 +38,6 @@ function initMap() {
     }
 }
 
-
-// Fetch Nearby Places from Backend
 function fetchNearbyPlaces(latitude, longitude) {
     fetch('/process-coordinates', {
         method: 'POST',
@@ -65,12 +55,9 @@ function fetchNearbyPlaces(latitude, longitude) {
     .catch(error => console.error("Error fetching nearby places:", error));
 }
 
-// Display Ranked Places List and Place Markers
-// Display Ranked Places List and Place Markers
 function displayNearbyPlaces(places) {
-    placesList.innerHTML = '';  // Clear previous list
-    places.forEach((place, index) => {
-        // Create a list item with structured content
+    placesList.innerHTML = '';
+    places.forEach((place) => {
         const listItem = document.createElement('div');
         listItem.className = 'place-item';
 
@@ -93,30 +80,27 @@ function displayNearbyPlaces(places) {
     });
 }
 
+function highlightPlace(place) {
+    map.panTo({ lat: place.latitude, lng: place.longitude });
+    map.setZoom(16);
+}
 
-
-// Fetch the Google Maps API key, cache it in localStorage, and load the map
 function fetchAndCacheGoogleMapsApiKey() {
     const cachedApiKey = localStorage.getItem("google_maps_api_key");
 
     if (cachedApiKey) {
-        console.log("Using cached Google Maps API key.");
         loadGoogleMapsApi(cachedApiKey);
     } else {
-        console.log("Fetching Google Maps API key from server.");
         fetch('/get-google-maps-key')
             .then(response => response.json())
             .then(data => {
                 if (data.key) {
                     localStorage.setItem("google_maps_api_key", data.key);
                     loadGoogleMapsApi(data.key);
-                } else {
-                    console.error("API key not found in response.");
                 }
             })
             .catch(error => console.error("Error fetching Google Maps API key:", error));
     }
 }
 
-// Fetch the API key and initialize the map
 fetchAndCacheGoogleMapsApiKey();

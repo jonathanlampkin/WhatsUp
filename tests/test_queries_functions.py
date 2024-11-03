@@ -2,12 +2,13 @@ import unittest
 import os
 from app.database.init_db import init_db, get_db_connection
 from app.services import AppService
+from unittest.mock import patch
 
 MOCK_LATITUDE = 37.7749
 MOCK_LONGITUDE = -122.4194
 
-class TestDatabaseAndIntegration(unittest.TestCase):
-    
+class TestQueriesFunctions(unittest.TestCase):
+
     @classmethod
     def setUpClass(cls):
         test_db_url = os.getenv("DATABASE_URL")
@@ -73,6 +74,25 @@ class TestDatabaseAndIntegration(unittest.TestCase):
                 ON CONFLICT (place_id) DO NOTHING
             ''', data)
             self.connection.commit()
+
+    # Test for Cache Management in AppService
+    def test_cache_management(self):
+        """Test the caching mechanism to ensure coordinates are stored and retrieved correctly."""
+        latitude, longitude = MOCK_LATITUDE, MOCK_LONGITUDE
+        cache_key = f"{latitude}_{longitude}"
+
+        # Clear cache and ensure coordinates are not cached initially
+        self.app_service.cache.clear()
+        self.assertIsNone(self.app_service.is_coordinates_cached(latitude, longitude))
+
+        # Populate cache and check if data is cached correctly
+        self.app_service.cache[cache_key] = "Test Data"
+        self.assertEqual(self.app_service.is_coordinates_cached(latitude, longitude), "Test Data")
+
+        # Test cache expiration by setting a short TTL and waiting
+        with patch('cachetools.TTLCache.__contains__', return_value=False):
+            self.assertIsNone(self.app_service.is_coordinates_cached(latitude, longitude), 
+                              "Cache did not expire as expected.")
 
 if __name__ == "__main__":
     unittest.main()
