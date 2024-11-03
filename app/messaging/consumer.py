@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from services import AppService
 import time
 
+# Load environment variables
 load_dotenv()
 RABBITMQ_URL = os.getenv("RABBITMQ_URL")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -30,17 +31,23 @@ def process_message(ch, method, properties, body):
         latitude = coords['latitude']
         longitude = coords['longitude']
         logging.info("Received coordinates %s, %s", latitude, longitude)
-        app_service.process_coordinates((latitude, longitude))
+        app_service.process_coordinates(latitude, longitude)
     except Exception as e:
         logging.error("Error processing message: %s", e)
 
 def start_consumer():
     connection = connect_to_rabbitmq()
     channel = connection.channel()
-    channel.queue_declare(queue="coordinates_queue")
+    channel.queue_declare(queue="coordinates_queue", durable=True)
     channel.basic_consume(queue="coordinates_queue", on_message_callback=process_message, auto_ack=True)
     logging.info("Waiting for messages.")
-    channel.start_consuming()
+    while True:
+        try:
+            channel.start_consuming()
+        except pika.exceptions.AMQPConnectionError as e:
+            logging.error("Lost connection to RabbitMQ. Reconnecting...")
+            time.sleep(5)
+            channel = connect_to_rabbitmq().channel()
 
 if __name__ == "__main__":
     start_consumer()

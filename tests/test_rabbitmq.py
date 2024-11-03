@@ -7,6 +7,7 @@ from app.services import AppService
 from dotenv import load_dotenv
 import pika
 import json
+import time
 
 # Load environment variables
 load_dotenv()
@@ -44,11 +45,16 @@ class TestRabbitMQMessaging(unittest.TestCase):
         message = {"latitude": 40.7128, "longitude": -74.0060}
         
         producer.send_message(self.queue_name, message)
-        method_frame, _, body = self.channel.basic_get(self.queue_name, auto_ack=True)
+        for _ in range(5):  # Retry loop to ensure message is received
+            method_frame, _, body = self.channel.basic_get(self.queue_name, auto_ack=True)
+            if method_frame:
+                break
+            time.sleep(0.5)  # Add delay to wait for message queueing
 
         self.assertIsNotNone(method_frame, "Message not received in queue.")
         self.assertEqual(json.loads(body), message, "Received message does not match expected content.")
         producer.close()
+
 
     @patch.object(AppService, 'process_coordinates')
     def test_consumer_receives_message(self, mock_process_coordinates):
