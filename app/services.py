@@ -89,12 +89,20 @@ class AppService:
 
     def process_coordinates(self, latitude, longitude):
         if self.check_coordinates_in_db(latitude, longitude):
+            logging.debug(f"Ranking nearby places for coordinates ({latitude}, {longitude})")
             return self.rank_nearby_places(latitude, longitude)
         else:
+            logging.debug(f"Fetching from Google Places API for coordinates ({latitude}, {longitude})")
             places = self.fetch_from_google_places_api(latitude, longitude)
             if places:
                 self.store_places_in_db_and_cache(latitude, longitude, places)
-            return self.rank_nearby_places(latitude, longitude)
+                # Call rank_nearby_places to ensure results are ranked
+                return self.rank_nearby_places(latitude, longitude)
+            else:
+                # Handle case where no places were found
+                logging.debug(f"No places found from Google Places API for coordinates ({latitude}, {longitude})")
+                return []
+
 
     def fetch_from_google_places_api(self, latitude, longitude, radius=5000, place_type="restaurant"):
         url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
