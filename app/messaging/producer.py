@@ -39,7 +39,8 @@ class RabbitMQProducer:
         try:
             if not self.channel or self.channel.is_closed:
                 self.connect_to_rabbitmq()
-            self.channel.queue_declare(queue=queue_name, durable=True)  # Declare queue as durable if it is persistent
+            # Declare queue with durable=True
+            self.channel.queue_declare(queue=queue_name, durable=True)
             message_body = json.dumps(message)
             self.channel.basic_publish(exchange='', routing_key=queue_name, body=message_body)
             logging.info(f"Sent '{message_body}' to {queue_name}")
@@ -51,7 +52,6 @@ class RabbitMQProducer:
         if self.connection and self.connection.is_open:
             self.connection.close()
             logging.info("RabbitMQ connection closed.")
-
 
 if __name__ == "__main__":
     producer = RabbitMQProducer(RABBITMQ_URL)

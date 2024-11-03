@@ -30,7 +30,9 @@ class TestRabbitMQMessaging(unittest.TestCase):
         google_api_key = os.getenv("GOOGLE_API_KEY")
         cls.app_service = AppService(google_api_key=google_api_key)
         
-        cls.channel.queue_declare(queue=cls.queue_name)
+        # Delete the queue if it exists and then declare it
+        cls.channel.queue_delete(queue=cls.queue_name)
+        cls.channel.queue_declare(queue=cls.queue_name, durable=True)  # Set durable=True to ensure consistency
         logging.info("Connected to RabbitMQ for tests.")
 
     @classmethod
@@ -45,16 +47,17 @@ class TestRabbitMQMessaging(unittest.TestCase):
         message = {"latitude": 40.7128, "longitude": -74.0060}
         
         producer.send_message(self.queue_name, message)
-        for _ in range(5):  # Retry loop to ensure message is received
+        
+        # Retry to ensure message is in the queue
+        for _ in range(5):
             method_frame, _, body = self.channel.basic_get(self.queue_name, auto_ack=True)
             if method_frame:
                 break
-            time.sleep(0.5)  # Add delay to wait for message queueing
+            time.sleep(0.5)
 
         self.assertIsNotNone(method_frame, "Message not received in queue.")
         self.assertEqual(json.loads(body), message, "Received message does not match expected content.")
         producer.close()
-
 
     @patch.object(AppService, 'process_coordinates')
     def test_consumer_receives_message(self, mock_process_coordinates):
@@ -67,9 +70,9 @@ class TestRabbitMQMessaging(unittest.TestCase):
         coords = json.loads(body)
         
         # Call process_coordinates explicitly to simulate consumer behavior
-        self.app_service.process_coordinates((coords['latitude'], coords['longitude']))
+        self.app_service.process_coordinates(coords['latitude'], coords['longitude'])
         
-        mock_process_coordinates.assert_called_once_with((coords['latitude'], coords['longitude']))
+        mock_process_coordinates.assert_called_once_with(coords['latitude'], coords['longitude'])
 
 if __name__ == "__main__":
     unittest.main()
