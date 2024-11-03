@@ -72,6 +72,21 @@ class AppService:
     def is_coordinates_cached(self, latitude, longitude):
         return self.cache.get(f"{latitude}_{longitude}")
 
+    def check_coordinates_in_db(self, latitude, longitude):
+        """
+        Check if the given coordinates already exist in the database.
+        """
+        query = "SELECT 1 FROM google_nearby_places WHERE latitude = %s AND longitude = %s"
+        conn = self.db_pool.getconn()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(query, (latitude, longitude))
+                result = cursor.fetchone() is not None
+                logging.debug(f"Checked database for ({latitude}, {longitude}): {'Found' if result else 'Not found'}")
+                return result
+        finally:
+            self.db_pool.putconn(conn)
+
     def process_coordinates(self, latitude, longitude):
         if self.check_coordinates_in_db(latitude, longitude):
             return self.rank_nearby_places(latitude, longitude)
