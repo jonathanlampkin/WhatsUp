@@ -10,12 +10,11 @@ import json
 
 # Load environment variables
 load_dotenv()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 RABBITMQ_URL = os.getenv("RABBITMQ_URL")
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 socketio = SocketIO(app, message_queue=RABBITMQ_URL, async_mode='eventlet')  # Enable message queuing with RabbitMQ
-app_service_instance = AppService(google_api_key=GOOGLE_API_KEY)
+app_service_instance = AppService()
 
 # Prometheus metrics
 metrics = {
@@ -37,12 +36,6 @@ def increment_metric(metric_name):
 def record_response_time(endpoint, start_time):
     metrics["response_time_histogram"].labels(endpoint=endpoint).observe(time.time() - start_time)
 
-@app.route('/get-google-maps-key')
-def get_google_maps_key():
-    if not GOOGLE_API_KEY:
-        return jsonify({"error": "Google Maps API key not found"}), 404
-    return jsonify({"key": GOOGLE_API_KEY})
-
 @app.before_request
 def log_request():
     increment_metric("request_counter")
@@ -58,17 +51,15 @@ def metrics_endpoint():
 
 @app.route('/')
 def index():
-    return render_template('index.html', google_maps_api_key=GOOGLE_API_KEY)
+    return render_template('index.html')
 
 @app.route('/health', methods=['GET'])
 def health_check():
     db_connected = app_service_instance.check_database_connection()
-    api_key_present = bool(app_service_instance.google_api_key)
     status = "healthy" if db_connected else "unhealthy"
     return jsonify({
         "status": status,
         "database": "connected" if db_connected else "disconnected",
-        "api_key_present": api_key_present,
     }), 200 if status == "healthy" else 500
 
 @app.route('/process-coordinates', methods=['POST'])
