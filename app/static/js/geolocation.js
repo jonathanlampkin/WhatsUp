@@ -56,20 +56,25 @@ function fetchNearbyPlaces(latitude, longitude) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    const socket = io.connect(window.location.origin, {
-        transports: ["websocket"],
-        upgrade: false
-    });
+    const socket = new WebSocket(`wss://${window.location.host}/ws`); // WebSocket connection for receiving updates
 
-    // Handle connection error and attempt reconnection
-    socket.on('connect_error', (error) => {
+    socket.onopen = () => {
+        console.log("WebSocket connection established.");
+    };
+
+    socket.onerror = (error) => {
         console.error("WebSocket connection error:", error);
-    });
+    };
 
-    socket.on('update', (data) => {
+    socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
         const { latitude, longitude, places } = data;
         displayNearbyPlaces(places);
-    });
+    };
+
+    socket.onclose = () => {
+        console.log("WebSocket connection closed.");
+    };
 });
 
 function displayNearbyPlaces(places) {

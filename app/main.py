@@ -52,6 +52,14 @@ def metrics_endpoint():
 async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+@app.get("/get-google-maps-key")
+def get_google_maps_key():
+    google_maps_api_key = os.getenv("GOOGLE_API_KEY")
+    if not google_maps_api_key:
+        return JSONResponse({"error": "Google Maps API key is not set."}, status_code=500)
+    return {"key": google_maps_api_key}
+
+
 @app.get('/health')
 async def health_check():
     db_connected = await app_service_instance.check_database_connection()
