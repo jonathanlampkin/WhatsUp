@@ -1,8 +1,7 @@
 import unittest
 import os
-from app.database.init_db import init_db, get_db_connection
+from app.database.init_db import init_db
 from app.services import AppService
-from unittest.mock import patch
 from dotenv import load_dotenv
 
 # Load environment variables explicitly for the test environment
