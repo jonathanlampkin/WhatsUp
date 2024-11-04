@@ -121,8 +121,6 @@ class AppService:
 
     async def rank_nearby_places(self, latitude, longitude):
         """Retrieve and rank nearby places from the database."""
-        latitude = round(latitude, 4)
-        longitude = round(longitude, 4)
         async with self.db_pool.acquire() as conn:
             query = '''
                 SELECT name, rating, user_ratings_total, price_level, open_now, 
@@ -132,7 +130,11 @@ class AppService:
                 ORDER BY open_now DESC NULLS LAST, rating DESC, proximity ASC, user_ratings_total DESC
                 LIMIT 10;
             '''
-            return await conn.fetch(query, latitude, longitude)
+            results = await conn.fetch(query, latitude, longitude)
+            
+            # Convert results to a list of dictionaries
+            places = [dict(record) for record in results]
+            return places
 
 
     async def send_to_rabbitmq(self, message):
