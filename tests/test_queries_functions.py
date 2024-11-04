@@ -13,7 +13,8 @@ MOCK_LONGITUDE = -122.4194
 
 class TestQueriesFunctions(unittest.IsolatedAsyncioTestCase):
 
-    async def asyncSetUp(self):
+    @classmethod
+    async def asyncSetUpClass(cls):
         # Ensure DATABASE_URL is set for testing
         test_db_url = os.getenv("DATABASE_URL")
         if not test_db_url:
@@ -22,29 +23,32 @@ class TestQueriesFunctions(unittest.IsolatedAsyncioTestCase):
         # Run init_db to ensure tables are created
         await init_db()
 
-        # Initialize the database connection and AppService instance for each test
-        self.connection = await get_db_connection()
-        self.app_service = AppService()
+        # Initialize the AppService instance and connect the database pool
+        cls.app_service = AppService()
+        await cls.app_service.connect_db()  # Ensure database pool is connected
 
-    async def asyncTearDown(self):
-        # Cleanup database and close the connection after each test
-        await self.cleanup_database()
-        await self.connection.close()
+    @classmethod
+    async def asyncTearDownClass(cls):
+        # Cleanup database and close the connection after all tests
+        await cls.cleanup_database()
+        await cls.app_service.db_pool.close()  # Close the database pool
 
-    async def cleanup_database(self):
+    @classmethod
+    async def cleanup_database(cls):
         """Helper method to clear test data from database."""
-        async with self.connection.transaction():
-            await self.connection.execute("DELETE FROM user_coordinates;")
-            await self.connection.execute("DELETE FROM google_nearby_places;")
+        async with cls.app_service.db_pool.acquire() as conn:
+            await conn.execute("DELETE FROM user_coordinates;")
+            await conn.execute("DELETE FROM google_nearby_places;")
 
     async def test_generate_entry(self):
         """Verify that generate_entry correctly inserts a unique coordinate entry."""
         await self.app_service.generate_entry(MOCK_LATITUDE, MOCK_LONGITUDE)
 
-        result = await self.connection.fetchrow(
-            "SELECT * FROM user_coordinates WHERE latitude = $1 AND longitude = $2;", 
-            MOCK_LATITUDE, MOCK_LONGITUDE
-        )
+        async with self.app_service.db_pool.acquire() as conn:
+            result = await conn.fetchrow(
+                "SELECT * FROM user_coordinates WHERE latitude = $1 AND longitude = $2;", 
+                MOCK_LATITUDE, MOCK_LONGITUDE
+            )
         
         self.assertIsNotNone(result, "Entry not found in user_coordinates for test coordinates.")
         self.assertEqual(result["latitude"], MOCK_LATITUDE)
@@ -66,16 +70,17 @@ class TestQueriesFunctions(unittest.IsolatedAsyncioTestCase):
 
     async def insert_mock_places(self, data):
         """Helper function to insert mock data for testing ranking."""
-        async with self.connection.transaction():
-            await self.connection.executemany('''
-                INSERT INTO google_nearby_places (
-                    latitude, longitude, place_id, name, business_status, rating, 
-                    user_ratings_total, vicinity, types, price_level, icon, 
-                    icon_background_color, icon_mask_base_uri, photo_reference, 
-                    photo_height, photo_width, open_now
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-                ON CONFLICT (place_id) DO NOTHING
-            ''', data)
+        async with self.app_service.db_pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.executemany('''
+                    INSERT INTO google_nearby_places (
+                        latitude, longitude, place_id, name, business_status, rating, 
+                        user_ratings_total, vicinity, types, price_level, icon, 
+                        icon_background_color, icon_mask_base_uri, photo_reference, 
+                        photo_height, photo_width, open_now
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                    ON CONFLICT (place_id) DO NOTHING
+                ''', data)
 
 if __name__ == "__main__":
     unittest.main()
