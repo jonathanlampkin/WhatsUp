@@ -1,6 +1,5 @@
 import unittest
 import os
-import asyncio
 from app.database.init_db import init_db, get_db_connection
 from app.services import AppService
 from unittest.mock import patch
@@ -15,18 +14,17 @@ class TestQueriesFunctions(unittest.IsolatedAsyncioTestCase):
 
     @classmethod
     async def asyncSetUpClass(cls):
-        # Ensure environment variable DATABASE_URL is set for testing
+        # Ensure DATABASE_URL is set for testing
         test_db_url = os.getenv("DATABASE_URL")
         if not test_db_url:
             raise EnvironmentError("DATABASE_URL for testing is not set in environment variables.")
         
-        # Run init_db asynchronously
+        # Run init_db to ensure tables are created
         await init_db()
 
-        # Initialize connection pool and app service
+        # Initialize connection and app service
         cls.connection = await get_db_connection()
         cls.app_service = AppService()
-        await cls.app_service.connect_db()
 
     @classmethod
     async def asyncTearDownClass(cls):
