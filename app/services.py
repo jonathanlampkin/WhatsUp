@@ -5,6 +5,7 @@ import logging
 from cachetools import TTLCache
 from dotenv import load_dotenv
 import aio_pika
+import asyncio
 
 load_dotenv()
 logging.basicConfig(level=logging.DEBUG)
@@ -15,6 +16,8 @@ class AppService:
         self.db_pool = None
         self.cache = TTLCache(maxsize=int(os.getenv("CACHE_SIZE", 100)), ttl=int(os.getenv("CACHE_TTL", 600)))
         self.rabbitmq_url = os.getenv("RABBITMQ_URL")
+        asyncio.run(self.connect_db())  
+
 
     async def connect_db(self):
         """Initialize a database connection pool."""
