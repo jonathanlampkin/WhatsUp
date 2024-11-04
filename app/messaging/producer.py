@@ -1,57 +1,32 @@
-import os
-import pika
 import json
 import logging
+from aio_pika import connect_robust, Message, DeliveryMode
 from dotenv import load_dotenv
-import time
+import os
 
-# Load environment variables
 load_dotenv()
-RABBITMQ_URL = os.getenv("RABBITMQ_URL")
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
 
 class RabbitMQProducer:
-    def __init__(self, rabbitmq_url):
-        self.connection_params = pika.URLParameters(rabbitmq_url)
+    def __init__(self):
+        self.rabbitmq_url = os.getenv("RABBITMQ_URL")
         self.connection = None
         self.channel = None
-        self.connect_to_rabbitmq()
 
-    def connect_to_rabbitmq(self, max_retries=5, delay=2):
-        for attempt in range(max_retries):
-            try:
-                self.connection = pika.BlockingConnection(self.connection_params)
-                self.channel = self.connection.channel()
-                # Declare queue as durable to ensure consistency
-                self.channel.queue_declare(queue="coordinates_queue", durable=True)
-                logging.info("Connected to RabbitMQ.")
-                return
-            except pika.exceptions.AMQPConnectionError as e:
-                logging.error(f"RabbitMQ connection attempt {attempt + 1} failed: {e}")
-                time.sleep(delay)
-                if self.connection and self.connection.is_open:
-                    self.connection.close()
-        raise RuntimeError("Could not establish RabbitMQ connection after multiple attempts")
+    async def connect(self):
+        self.connection = await connect_robust(self.rabbitmq_url)
+        self.channel = await self.connection.channel()
+        await self.channel.declare_queue("coordinates_queue", durable=True)
 
-    def send_message(self, queue_name, message):
-        try:
-            if not self.channel or self.channel.is_closed:
-                self.connect_to_rabbitmq()
-            self.channel.queue_declare(queue=queue_name, durable=True)
-            message_body = json.dumps(message)
-            self.channel.basic_publish(exchange='', routing_key=queue_name, body=message_body)
-            logging.info(f"Sent '{message_body}' to {queue_name}")
-        except Exception as e:
-            logging.error(f"Failed to send message to RabbitMQ: {e}")
-            self.connect_to_rabbitmq()
+    async def send_message(self, queue_name, message):
+        if not self.channel:
+            await self.connect()
+        await self.channel.default_exchange.publish(
+            Message(body=json.dumps(message).encode(), delivery_mode=DeliveryMode.PERSISTENT),
+            routing_key=queue_name,
+        )
+        logging.info(f"Sent '{message}' to {queue_name}")
 
-    def close(self):
-        if self.connection and self.connection.is_open:
-            self.connection.close()
+    async def close(self):
+        if self.connection:
+            await self.connection.close()
             logging.info("RabbitMQ connection closed.")
-
-if __name__ == "__main__":
-    producer = RabbitMQProducer(RABBITMQ_URL)
-    producer.close()

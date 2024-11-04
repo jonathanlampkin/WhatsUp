@@ -1,19 +1,18 @@
-from flask import Flask, request, render_template, jsonify, Response
-from flask_socketio import SocketIO
-import os
-from dotenv import load_dotenv
-from app.services import AppService
+from fastapi import FastAPI, WebSocket, Request, BackgroundTasks
+from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
 from prometheus_client import Counter, Histogram, generate_latest
+from app.services import AppService
+from app.messaging.consumer import start_rabbitmq_consumer
+from dotenv import load_dotenv
 import logging
 import time
-import json
+import os
 
 # Load environment variables
 load_dotenv()
-RABBITMQ_URL = os.getenv("RABBITMQ_URL")
-
-app = Flask(__name__, template_folder='templates', static_folder='static')
-socketio = SocketIO(app, message_queue=RABBITMQ_URL, async_mode='eventlet')  # Enable message queuing with RabbitMQ
+app = FastAPI()
+templates = Jinja2Templates(directory="templates")
 app_service_instance = AppService()
 
 # Prometheus metrics
@@ -28,91 +27,43 @@ metrics = {
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
-logging.info("Starting Flask application.")
 
-def increment_metric(metric_name):
-    metrics.get(metric_name).inc()
-
-def record_response_time(endpoint, start_time):
-    metrics["response_time_histogram"].labels(endpoint=endpoint).observe(time.time() - start_time)
-
-@app.before_request
-def log_request():
-    increment_metric("request_counter")
-
-@app.after_request
-def log_response(response):
-    increment_metric("response_counter")
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    metrics["request_counter"].inc()
+    start_time = time.time()
+    response = await call_next(request)
+    metrics["response_counter"].inc()
+    metrics["response_time_histogram"].labels(endpoint=request.url.path).observe(time.time() - start_time)
     return response
 
-@app.route('/metrics')
+@app.get('/metrics')
 def metrics_endpoint():
-    return Response(generate_latest(), mimetype='text/plain')
+    return JSONResponse(generate_latest(), media_type='text/plain')
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
-@app.route('/health', methods=['GET'])
-def health_check():
-    db_connected = app_service_instance.check_database_connection()
+@app.get('/health')
+async def health_check():
+    db_connected = await app_service_instance.check_database_connection()
     status = "healthy" if db_connected else "unhealthy"
-    return jsonify({
+    return JSONResponse({
         "status": status,
         "database": "connected" if db_connected else "disconnected",
-    }), 200 if status == "healthy" else 500
+    }, status_code=200 if status == "healthy" else 500)
 
-@app.route('/process-coordinates', methods=['POST'])
-def process_coordinates():
-    start_time = time.time()
-    data = request.json
+@app.post('/process-coordinates')
+async def process_coordinates(data: dict, background_tasks: BackgroundTasks):
     latitude = round(data.get('latitude', 0), 4)
     longitude = round(data.get('longitude', 0), 4)
+    background_tasks.add_task(app_service_instance.send_coordinates_if_not_cached, latitude, longitude)
+    metrics["coordinates_saved_counter"].inc()
+    return {"status": "processing"}
 
-    # Send coordinates to AppService for processing
-    app_service_instance.send_coordinates_if_not_cached(latitude, longitude)
-    increment_metric("coordinates_saved_counter")
-    record_response_time('/process-coordinates', start_time)
-
-    return jsonify({"status": "processing"}), 202
-
-# WebSocket events for real-time updates
-@socketio.on('connect')
-def on_connect():
-    logging.info("Client connected for WebSocket updates.")
-
-@socketio.on('disconnect')
-def on_disconnect():
-    logging.info("Client disconnected.")
-
-def send_updates(data):
-    # Emit data to clients via WebSocket
-    socketio.emit('update', data)
-
-def start_rabbitmq_consumer():
-    """
-    Starts a background task to consume messages from RabbitMQ and
-    emit real-time updates to WebSocket clients.
-    """
-    def consume():
-        import pika
-        connection = pika.BlockingConnection(pika.URLParameters(RABBITMQ_URL))
-        channel = connection.channel()
-        channel.queue_declare(queue='coordinates_queue', durable=True)
-
-        def callback(ch, method, properties, body):
-            data = json.loads(body)
-            send_updates(data)  # Emit data to WebSocket clients
-            ch.basic_ack(delivery_tag=method.delivery_tag)
-
-        channel.basic_consume(queue='coordinates_queue', on_message_callback=callback)
-        channel.start_consuming()
-
-    socketio.start_background_task(consume)
-
-# Start the RabbitMQ consumer in a background task
-start_rabbitmq_consumer()
-
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 5000))
-    socketio.run(app, host="0.0.0.0", port=port)
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    await start_rabbitmq_consumer(websocket, app_service_instance)
+    await websocket.close()

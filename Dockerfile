@@ -16,5 +16,5 @@ COPY . /app
 # Expose the port the app runs on (make sure it matches the port your app uses)
 EXPOSE 5000
 
-# Define the command to run your app using gunicorn and use the environment variable $PORT
-CMD ["gunicorn", "app.main:app", "--bind", "0.0.0.0:${PORT:-5000}"]
+# Define the command to run your app using uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${PORT:-5000}"]

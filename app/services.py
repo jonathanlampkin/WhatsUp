@@ -1,136 +1,77 @@
 import os
-import requests
 import json
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from psycopg2 import pool
-from dotenv import load_dotenv
 import logging
-import pika
+import aiohttp
+import asyncpg
+from dotenv import load_dotenv
 from cachetools import TTLCache
-from urllib3.util.retry import Retry
-from requests.adapters import HTTPAdapter
-import time
+from aio_pika import connect_robust, Message, DeliveryMode
+from typing import List, Optional
 
 load_dotenv()
-logging.basicConfig(level=logging.DEBUG)
-
-import os
-import requests
-import json
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from psycopg2 import pool
-from dotenv import load_dotenv
-import logging
-import pika
-from cachetools import TTLCache
-from urllib3.util.retry import Retry
-from requests.adapters import HTTPAdapter
-import time
-
-load_dotenv()
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 class AppService:
-    def __init__(self, google_api_key=None):
-        self.google_api_key = google_api_key
-        self.db_pool = pool.SimpleConnectionPool(1, 10, dsn=os.getenv("DATABASE_URL"))
+    def __init__(self):
+        self.google_api_key = os.getenv("GOOGLE_API_KEY")
         self.cache = TTLCache(maxsize=int(os.getenv("CACHE_SIZE", 100)), ttl=int(os.getenv("CACHE_TTL", 600)))
-        rabbitmq_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
-        self.rabbitmq_params = pika.URLParameters(rabbitmq_url)
+        self.db_pool = None
         self.rabbitmq_connection = None
-        self.rabbitmq_channel = None
-        self.connect_to_rabbitmq()
 
-    def connect_to_rabbitmq(self, max_retries=5, delay=2):
-        for attempt in range(max_retries):
-            try:
-                if self.rabbitmq_connection is None or self.rabbitmq_connection.is_closed:
-                    self.rabbitmq_connection = pika.BlockingConnection(self.rabbitmq_params)
-                    self.rabbitmq_channel = self.rabbitmq_connection.channel()
-                    self.rabbitmq_channel.queue_declare(queue="coordinates_queue", durable=True)
-                    logging.info("Connected to RabbitMQ.")
-                return
-            except pika.exceptions.AMQPConnectionError as e:
-                logging.error(f"RabbitMQ connection attempt {attempt + 1} failed: {e}")
-                time.sleep(delay)
-        raise RuntimeError("Could not establish RabbitMQ connection after multiple attempts")
+    async def initialize(self):
+        self.db_pool = await asyncpg.create_pool(dsn=os.getenv("DATABASE_URL"))
+        self.rabbitmq_connection = await connect_robust(os.getenv("RABBITMQ_URL"))
 
-    def send_coordinates_if_not_cached(self, latitude, longitude):
+    async def send_coordinates_if_not_cached(self, latitude, longitude):
         if not self.is_coordinates_cached(latitude, longitude):
             message = json.dumps({"latitude": latitude, "longitude": longitude})
-            try:
-                if not self.rabbitmq_channel or self.rabbitmq_channel.is_closed:
-                    self.connect_to_rabbitmq()
-                self.rabbitmq_channel.basic_publish(exchange='', routing_key="coordinates_queue", body=message)
-                logging.info(f"Sent {message} to RabbitMQ")
-            except Exception as e:
-                logging.error(f"Failed to send message to RabbitMQ: {e}")
-                self.connect_to_rabbitmq()
+            await self.publish_message("coordinates_queue", message)
 
-    def is_coordinates_cached(self, latitude, longitude):
+    def is_coordinates_cached(self, latitude, longitude) -> Optional[dict]:
         return self.cache.get(f"{latitude}_{longitude}")
 
-    def check_coordinates_in_db(self, latitude, longitude):
-        """
-        Check if the given coordinates already exist in the database.
-        """
-        query = "SELECT 1 FROM google_nearby_places WHERE latitude = %s AND longitude = %s"
-        conn = self.db_pool.getconn()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(query, (latitude, longitude))
-                result = cursor.fetchone() is not None
-                logging.debug(f"Checked database for ({latitude}, {longitude}): {'Found' if result else 'Not found'}")
-                return result
-        finally:
-            self.db_pool.putconn(conn)
+    async def publish_message(self, queue_name, message):
+        async with self.rabbitmq_connection.channel() as channel:
+            await channel.declare_queue(queue_name, durable=True)
+            await channel.default_exchange.publish(
+                Message(body=message.encode(), delivery_mode=DeliveryMode.PERSISTENT),
+                routing_key=queue_name,
+            )
+            logging.info(f"Sent {message} to RabbitMQ")
 
-    def process_coordinates(self, latitude, longitude):
-        if self.check_coordinates_in_db(latitude, longitude):
-            logging.debug(f"Ranking nearby places for coordinates ({latitude}, {longitude})")
-            return self.rank_nearby_places(latitude, longitude)
-        else:
-            logging.debug(f"Fetching from Google Places API for coordinates ({latitude}, {longitude})")
-            places = self.fetch_from_google_places_api(latitude, longitude)
-            if places:
-                self.store_places_in_db_and_cache(latitude, longitude, places)
-                # Call rank_nearby_places to ensure results are ranked
-                return self.rank_nearby_places(latitude, longitude)
-            else:
-                # Handle case where no places were found
-                logging.debug(f"No places found from Google Places API for coordinates ({latitude}, {longitude})")
-                return []
+    async def check_database_connection(self):
+        async with self.db_pool.acquire() as conn:
+            result = await conn.fetchval("SELECT 1;")
+            return result is not None
 
+    async def check_coordinates_in_db(self, latitude, longitude) -> bool:
+        query = "SELECT 1 FROM google_nearby_places WHERE latitude = $1 AND longitude = $2"
+        async with self.db_pool.acquire() as conn:
+            result = await conn.fetchval(query, latitude, longitude)
+            return result is not None
 
-    def fetch_from_google_places_api(self, latitude, longitude, radius=5000, place_type="restaurant"):
+    async def fetch_from_google_places_api(self, latitude, longitude, radius=5000, place_type="restaurant") -> List[dict]:
         url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
         params = {'location': f"{latitude},{longitude}", 'radius': radius, 'type': place_type, 'key': self.google_api_key}
-        session = requests.Session()
-        retries = Retry(total=3, backoff_factor=0.3, status_forcelist=[500, 502, 503, 504])
-        session.mount("https://", HTTPAdapter(max_retries=retries))
-        response = session.get(url, params=params)
-        return response.json().get('results', []) if response.status_code == 200 else []
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return result.get("results", [])
+                return []
 
-    def store_places_in_db_and_cache(self, latitude, longitude, places):
-        for place in places:
-            self.insert_place_data(latitude, longitude, place)
-        self.cache[f"{latitude}_{longitude}"] = places
-
-    def insert_place_data(self, latitude, longitude, place):
-        query = '''
-            INSERT INTO google_nearby_places (latitude, longitude, place_id, name, business_status, rating, 
-                                              user_ratings_total, vicinity, types, price_level, icon, 
-                                              icon_background_color, icon_mask_base_uri, photo_reference, 
-                                              photo_height, photo_width, open_now) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (place_id) DO NOTHING
-        '''
-        conn = self.db_pool.getconn()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(query, (
+    async def store_places_in_db_and_cache(self, latitude, longitude, places: List[dict]):
+        async with self.db_pool.acquire() as conn:
+            for place in places:
+                await conn.execute(
+                    '''
+                    INSERT INTO google_nearby_places (latitude, longitude, place_id, name, business_status, rating, 
+                                                      user_ratings_total, vicinity, types, price_level, icon, 
+                                                      icon_background_color, icon_mask_base_uri, photo_reference, 
+                                                      photo_height, photo_width, open_now) 
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                    ON CONFLICT (place_id) DO NOTHING
+                    ''',
                     latitude, longitude, place.get("place_id"), place.get("name"), place.get("business_status"),
                     place.get("rating"), place.get("user_ratings_total"), place.get("vicinity"), 
                     json.dumps(place.get("types", [])), place.get("price_level"), place.get("icon"),
@@ -139,41 +80,27 @@ class AppService:
                     (place['photos'][0]['height'] if 'photos' in place and place['photos'] else None), 
                     (place['photos'][0]['width'] if 'photos' in place and place['photos'] else None), 
                     place.get("opening_hours", {}).get("open_now")
-                ))
-                conn.commit()
-        finally:
-            self.db_pool.putconn(conn)
+                )
+        self.cache[f"{latitude}_{longitude}"] = places
 
-
-    def rank_nearby_places(self, latitude, longitude):
-        """
-        Retrieves and ranks nearby places from the database based on various criteria:
-        open status, rating, proximity, and user rating count.
-        """
+    async def rank_nearby_places(self, latitude, longitude) -> List[dict]:
         query = '''
             SELECT name, rating, user_ratings_total, price_level, open_now, 
-                (ABS(latitude - %s) + ABS(longitude - %s)) AS proximity
+                (ABS(latitude - $1) + ABS(longitude - $2)) AS proximity
             FROM google_nearby_places
-            WHERE latitude = %s AND longitude = %s
+            WHERE latitude = $1 AND longitude = $2
             ORDER BY open_now DESC NULLS LAST, rating DESC, proximity ASC, user_ratings_total DESC
             LIMIT 10;
         '''
-        conn = self.db_pool.getconn()
-        try:
-            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                cursor.execute(query, (latitude, longitude, latitude, longitude))
-                results = cursor.fetchall()
-                ranked_places = [
-                    {
-                        "name": row["name"],
-                        "rating": row["rating"],
-                        "user_ratings_total": row["user_ratings_total"],
-                        "price_level": row["price_level"],
-                        "open_now": row["open_now"]
-                    }
-                    for row in results
-                ]
-                logging.debug(f"Ranked places: {ranked_places}")
-                return ranked_places
-        finally:
-            self.db_pool.putconn(conn)
+        async with self.db_pool.acquire() as conn:
+            rows = await conn.fetch(query, latitude, longitude)
+            return [
+                {
+                    "name": row["name"],
+                    "rating": row["rating"],
+                    "user_ratings_total": row["user_ratings_total"],
+                    "price_level": row["price_level"],
+                    "open_now": row["open_now"]
+                }
+                for row in rows
+            ]
