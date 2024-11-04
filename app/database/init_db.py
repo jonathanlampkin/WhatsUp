@@ -4,6 +4,7 @@ import logging
 from dotenv import load_dotenv
 import asyncio
 
+# Load environment variables
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
@@ -11,8 +12,17 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:admin@localhost:
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
+async def get_db_connection():
+    """
+    Establish an asynchronous connection to the database.
+    """
+    return await asyncpg.connect(DATABASE_URL)
+
 async def init_db():
-    conn = await asyncpg.connect(DATABASE_URL)
+    """
+    Initialize the database tables asynchronously.
+    """
+    conn = await get_db_connection()
     try:
         await conn.execute('''
             CREATE TABLE IF NOT EXISTS user_coordinates (
