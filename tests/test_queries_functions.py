@@ -1,7 +1,9 @@
 import unittest
 import os
-from app.database.init_db import init_db
+import asyncio
+from app.database.init_db import init_db, get_db_connection
 from app.services import AppService
+from unittest.mock import patch
 from dotenv import load_dotenv
 
 # Load environment variables explicitly for the test environment
@@ -21,17 +23,20 @@ class TestQueriesFunctions(unittest.IsolatedAsyncioTestCase):
         # Run init_db to ensure tables are created
         await init_db()
 
-        # Initialize the AppService instance and connect the database pool
-        self.app_service = AppService()
-        await self.app_service.connect_db()  # Ensure database pool is connected
+        # Initialize the database connection and AppService instance
+        print("Setting up app_service for each test...")
+        self.app_service = AppService()  # Instantiate AppService
+        await self.app_service.connect_db()  # Connect db_pool explicitly
+        print("AppService initialized:", self.app_service)
+        print("db_pool connected:", self.app_service.db_pool is not None)
 
     async def asyncTearDown(self):
-        # Cleanup database and close the connection after each test
+        # Cleanup database and close the connection after all tests
         await self.cleanup_database()
-        await self.app_service.db_pool.close()  # Close the database pool
+        await self.app_service.db_pool.close()
 
     async def cleanup_database(self):
-        """Helper method to clear test data from database."""
+        """Helper method to clear test data from the database."""
         async with self.app_service.db_pool.acquire() as conn:
             await conn.execute("DELETE FROM user_coordinates;")
             await conn.execute("DELETE FROM google_nearby_places;")

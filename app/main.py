@@ -28,6 +28,11 @@ metrics = {
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
+@app.on_event("startup")
+async def startup_event():
+    await app_service_instance.initialize()
+
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     metrics["request_counter"].inc()

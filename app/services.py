@@ -16,11 +16,11 @@ class AppService:
         self.db_pool = None
         self.cache = TTLCache(maxsize=int(os.getenv("CACHE_SIZE", 100)), ttl=int(os.getenv("CACHE_TTL", 600)))
         self.rabbitmq_url = os.getenv("RABBITMQ_URL")
-        asyncio.run(self.connect_db())  
 
+    async def initialize(self):
+        await self.connect_db()
 
     async def connect_db(self):
-        """Initialize a database connection pool."""
         self.db_pool = await asyncpg.create_pool(dsn=os.getenv("DATABASE_URL"))
 
     async def generate_entry(self, latitude, longitude):
