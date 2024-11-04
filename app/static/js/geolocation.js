@@ -4,8 +4,8 @@ const placesList = document.getElementById('places-list');
 function loadGoogleMapsApi(apiKey) {
     const script = document.createElement('script');
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMap`;
-    script.async = true; // Load API asynchronously
-    script.defer = true; // Defer execution
+    script.async = true;
+    script.defer = true;
     document.head.appendChild(script);
 }
 
@@ -56,7 +56,7 @@ function fetchNearbyPlaces(latitude, longitude) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    const socket = new WebSocket(`wss://${window.location.host}/ws`); // WebSocket connection for receiving updates
+    const socket = new WebSocket(`wss://${window.location.host}/ws`);
 
     socket.onopen = () => {
         console.log("WebSocket connection established.");
@@ -67,14 +67,18 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        console.log("Received data:", data); // Log the received data
-        const { latitude, longitude, places } = data;
-        
-        if (places && places.length > 0) {
-            displayNearbyPlaces(places);
-        } else {
-            console.warn("No places received or places array is empty.");
+        try {
+            const data = JSON.parse(event.data);
+            console.log("Received data from WebSocket:", data);
+
+            const { latitude, longitude, places } = data;
+            if (places && places.length > 0) {
+                displayNearbyPlaces(places);
+            } else {
+                console.warn("No places received or places array is empty.");
+            }
+        } catch (error) {
+            console.error("Error parsing WebSocket message:", error);
         }
     };
 

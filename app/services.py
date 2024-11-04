@@ -26,7 +26,7 @@ class AppService:
     async def generate_entry(self, latitude, longitude):
         latitude = round(latitude, 4)
         longitude = round(longitude, 4)
-        """Generate a unique entry for given coordinates."""
+        logging.debug(f"Generating entry for coordinates: {latitude}, {longitude}")
         if not await self.check_coordinates_in_db(latitude, longitude):
             async with self.db_pool.acquire() as conn:
                 await conn.execute('''
@@ -34,24 +34,25 @@ class AppService:
                     VALUES ($1, $2)
                     ON CONFLICT DO NOTHING;
                 ''', latitude, longitude)
-            logging.debug(f"Inserted coordinates ({latitude}, {longitude}) into database.")
 
     async def process_coordinates(self, latitude, longitude):
-        """Process coordinates by checking cache, database, and Google Places API."""
+        logging.debug(f"Processing coordinates: {latitude}, {longitude}")
         if self.is_coordinates_cached(latitude, longitude):
-            logging.debug(f"Coordinates ({latitude}, {longitude}) found in cache.")
+            logging.debug(f"Coordinates found in cache: {latitude}, {longitude}")
             return await self.rank_nearby_places(latitude, longitude)
         
         if await self.check_coordinates_in_db(latitude, longitude):
-            logging.debug(f"Coordinates ({latitude}, {longitude}) found in database.")
+            logging.debug(f"Coordinates found in database: {latitude}, {longitude}")
             return await self.rank_nearby_places(latitude, longitude)
         
+        logging.debug(f"Fetching from Google API for coordinates: {latitude}, {longitude}")
         places = await self.fetch_from_google_places_api(latitude, longitude)
         if places:
+            logging.debug(f"Fetched {len(places)} places from Google Places API.")
             await self.store_places_in_db_and_cache(latitude, longitude, places)
-            logging.debug(f"Stored {len(places)} places for coordinates ({latitude}, {longitude}).")
             return await self.rank_nearby_places(latitude, longitude)
-        logging.warning(f"No places found for coordinates ({latitude}, {longitude}).")
+        else:
+            logging.warning("No places found from Google API.")
         return []
 
     async def send_coordinates_if_not_cached(self, latitude, longitude):
@@ -60,23 +61,18 @@ class AppService:
         if not self.is_coordinates_cached(latitude, longitude):
             message = {"latitude": latitude, "longitude": longitude}
             await self.send_to_rabbitmq(message)
-            logging.debug(f"Sent coordinates ({latitude}, {longitude}) to RabbitMQ.")
 
     def is_coordinates_cached(self, latitude, longitude):
-        """Check if coordinates are in the cache."""
         return self.cache.get(f"{latitude}_{longitude}")
 
     async def check_coordinates_in_db(self, latitude, longitude):
-        """Check if coordinates already exist in the database."""
         async with self.db_pool.acquire() as conn:
             query = "SELECT 1 FROM user_coordinates WHERE latitude = $1 AND longitude = $2"
             result = await conn.fetchrow(query, latitude, longitude)
             return result is not None
 
     async def fetch_from_google_places_api(self, latitude, longitude, radius=5000, place_type="restaurant"):
-        """Fetch nearby places from Google Places API."""
-        timeout = aiohttp.ClientTimeout(total=10)  # Set a 10-second timeout
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with aiohttp.ClientSession() as session:
             params = {
                 'location': f"{latitude},{longitude}",
                 'radius': radius,
@@ -86,22 +82,21 @@ class AppService:
             async with session.get("https://maps.googleapis.com/maps/api/place/nearbysearch/json", params=params) as response:
                 if response.status == 200:
                     result = await response.json()
-                    logging.info(f"Fetched {len(result['results'])} places from Google Places API.")
+                    logging.debug(f"Google API returned {len(result['results'])} places for coordinates: {latitude}, {longitude}")
                     return result.get('results', [])
                 else:
-                    logging.error(f"Error fetching places: {response.status}, {await response.text()}")
+                    logging.error(f"Google API error: {response.status} {await response.text()}")
                     return []
 
     async def store_places_in_db_and_cache(self, latitude, longitude, places):
-        """Store fetched places in the database and cache."""
         async with self.db_pool.acquire() as conn:
             async with conn.transaction():
                 for place in places:
                     await self.insert_place_data(conn, latitude, longitude, place)
         self.cache[f"{latitude}_{longitude}"] = places
+        logging.debug(f"Stored {len(places)} places in database and cache.")
 
     async def insert_place_data(self, conn, latitude, longitude, place):
-        """Insert individual place data into the database."""
         await conn.execute('''
             INSERT INTO google_nearby_places (
                 latitude, longitude, place_id, name, business_status, rating, 
@@ -112,17 +107,14 @@ class AppService:
             ON CONFLICT (place_id) DO NOTHING
         ''', latitude, longitude, place.get("place_id"), place.get("name"), place.get("business_status"),
         place.get("rating"), place.get("user_ratings_total"), place.get("vicinity"), 
-        ','.join(place.get("types", [])),  # Join list into a string
-        place.get("price_level"), place.get("icon"),
+        ','.join(place.get("types", [])), place.get("price_level"), place.get("icon"),
         place.get("icon_background_color"), place.get("icon_mask_base_uri"), 
         (place['photos'][0]['photo_reference'] if 'photos' in place and place['photos'] else None), 
         (place['photos'][0]['height'] if 'photos' in place and place['photos'] else None), 
         (place['photos'][0]['width'] if 'photos' in place and place['photos'] else None), 
         place.get("opening_hours", {}).get("open_now"))
 
-
     async def rank_nearby_places(self, latitude, longitude):
-        """Retrieve and rank nearby places from the database."""
         async with self.db_pool.acquire() as conn:
             query = '''
                 SELECT name, rating, user_ratings_total, price_level, open_now, 
@@ -133,15 +125,11 @@ class AppService:
                 LIMIT 10;
             '''
             results = await conn.fetch(query, latitude, longitude)
-            
-            # Convert results to a list of dictionaries
             places = [dict(record) for record in results]
-            logging.info(f"Ranked {len(places)} places for coordinates ({latitude}, {longitude}).")
+            logging.debug(f"Ranked {len(places)} places for coordinates: {latitude}, {longitude}")
             return places
 
-
     async def send_to_rabbitmq(self, message):
-        """Send a message to RabbitMQ."""
         connection = await aio_pika.connect_robust(self.rabbitmq_url)
         async with connection:
             channel = await connection.channel()
@@ -149,3 +137,4 @@ class AppService:
                 aio_pika.Message(body=str(message).encode()),
                 routing_key="coordinates_queue"
             )
+        logging.debug(f"Sent coordinates to RabbitMQ: {message}")
