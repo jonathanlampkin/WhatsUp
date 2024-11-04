@@ -13,8 +13,7 @@ MOCK_LONGITUDE = -122.4194
 
 class TestQueriesFunctions(unittest.IsolatedAsyncioTestCase):
 
-    @classmethod
-    async def asyncSetUpClass(cls):
+    async def asyncSetUp(self):
         # Ensure DATABASE_URL is set for testing
         test_db_url = os.getenv("DATABASE_URL")
         if not test_db_url:
@@ -23,22 +22,20 @@ class TestQueriesFunctions(unittest.IsolatedAsyncioTestCase):
         # Run init_db to ensure tables are created
         await init_db()
 
-        # Initialize the database connection and AppService instance
-        cls.connection = await get_db_connection()
-        cls.app_service = AppService()
+        # Initialize the database connection and AppService instance for each test
+        self.connection = await get_db_connection()
+        self.app_service = AppService()
 
-    @classmethod
-    async def asyncTearDownClass(cls):
-        # Cleanup database and close the connection after all tests
-        await cls.cleanup_database()
-        await cls.connection.close()
+    async def asyncTearDown(self):
+        # Cleanup database and close the connection after each test
+        await self.cleanup_database()
+        await self.connection.close()
 
-    @classmethod
-    async def cleanup_database(cls):
+    async def cleanup_database(self):
         """Helper method to clear test data from database."""
-        async with cls.connection.transaction():
-            await cls.connection.execute("DELETE FROM user_coordinates;")
-            await cls.connection.execute("DELETE FROM google_nearby_places;")
+        async with self.connection.transaction():
+            await self.connection.execute("DELETE FROM user_coordinates;")
+            await self.connection.execute("DELETE FROM google_nearby_places;")
 
     async def test_generate_entry(self):
         """Verify that generate_entry correctly inserts a unique coordinate entry."""
