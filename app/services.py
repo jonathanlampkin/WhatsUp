@@ -24,6 +24,8 @@ class AppService:
         self.db_pool = await asyncpg.create_pool(dsn=os.getenv("DATABASE_URL"))
 
     async def generate_entry(self, latitude, longitude):
+        latitude = round(latitude, 4)
+        longitude = round(longitude, 4)
         """Generate a unique entry for given coordinates."""
         if not await self.check_coordinates_in_db(latitude, longitude):
             async with self.db_pool.acquire() as conn:
@@ -48,10 +50,13 @@ class AppService:
         return []
 
     async def send_coordinates_if_not_cached(self, latitude, longitude):
-        """Send coordinates to RabbitMQ if they are not cached."""
+        latitude = round(latitude, 4)
+        longitude = round(longitude, 4)
         if not self.is_coordinates_cached(latitude, longitude):
             message = {"latitude": latitude, "longitude": longitude}
             await self.send_to_rabbitmq(message)
+
+
 
     def is_coordinates_cached(self, latitude, longitude):
         """Check if coordinates are in the cache."""
