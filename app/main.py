@@ -69,9 +69,12 @@ async def health_check():
 async def process_coordinates(data: dict, background_tasks: BackgroundTasks):
     latitude = round(data.get('latitude', 0), 4)
     longitude = round(data.get('longitude', 0), 4)
+    logging.info(f"Received coordinates for processing: ({latitude}, {longitude})")
     background_tasks.add_task(app_service_instance.send_coordinates_if_not_cached, latitude, longitude)
     metrics["coordinates_saved_counter"].inc()
+    logging.debug("Coordinates saved counter incremented.")
     return {"status": "processing"}
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

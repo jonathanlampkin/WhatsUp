@@ -20,11 +20,13 @@ class RabbitMQProducer:
     async def send_message(self, queue_name, message):
         if not self.channel:
             await self.connect()
+        logging.debug(f"Publishing message to queue '{queue_name}': {message}")
         await self.channel.default_exchange.publish(
             Message(body=json.dumps(message).encode(), delivery_mode=DeliveryMode.PERSISTENT),
             routing_key=queue_name,
         )
         logging.info(f"Sent '{message}' to {queue_name}")
+
 
     async def close(self):
         if self.connection:
