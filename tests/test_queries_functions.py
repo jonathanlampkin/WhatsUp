@@ -5,6 +5,7 @@ from app.services import AppService
 from unittest.mock import patch
 from dotenv import load_dotenv
 
+# Load environment variables explicitly for the test environment
 load_dotenv()
 
 MOCK_LATITUDE = 37.7749
@@ -22,17 +23,19 @@ class TestQueriesFunctions(unittest.IsolatedAsyncioTestCase):
         # Run init_db to ensure tables are created
         await init_db()
 
-        # Initialize connection and app service
+        # Initialize the database connection and AppService instance
         cls.connection = await get_db_connection()
         cls.app_service = AppService()
 
     @classmethod
     async def asyncTearDownClass(cls):
+        # Cleanup database and close the connection after all tests
         await cls.cleanup_database()
         await cls.connection.close()
 
     @classmethod
     async def cleanup_database(cls):
+        """Helper method to clear test data from database."""
         async with cls.connection.transaction():
             await cls.connection.execute("DELETE FROM user_coordinates;")
             await cls.connection.execute("DELETE FROM google_nearby_places;")
@@ -65,15 +68,17 @@ class TestQueriesFunctions(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ranked_places[0]['name'], "Place C", "Highest-rated place is not ranked first.")
 
     async def insert_mock_places(self, data):
-        await self.connection.executemany('''
-            INSERT INTO google_nearby_places (
-                latitude, longitude, place_id, name, business_status, rating, 
-                user_ratings_total, vicinity, types, price_level, icon, 
-                icon_background_color, icon_mask_base_uri, photo_reference, 
-                photo_height, photo_width, open_now
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-            ON CONFLICT (place_id) DO NOTHING
-        ''', data)
+        """Helper function to insert mock data for testing ranking."""
+        async with self.connection.transaction():
+            await self.connection.executemany('''
+                INSERT INTO google_nearby_places (
+                    latitude, longitude, place_id, name, business_status, rating, 
+                    user_ratings_total, vicinity, types, price_level, icon, 
+                    icon_background_color, icon_mask_base_uri, photo_reference, 
+                    photo_height, photo_width, open_now
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                ON CONFLICT (place_id) DO NOTHING
+            ''', data)
 
 if __name__ == "__main__":
     unittest.main()
