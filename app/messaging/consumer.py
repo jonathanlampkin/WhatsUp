@@ -19,14 +19,15 @@ async def process_message(message: IncomingMessage, app_service: AppService, web
             await app_service.store_places_in_db_and_cache(latitude, longitude, places)
             ranked_places = await app_service.rank_nearby_places(latitude, longitude)
             logging.info(f"Ranked places found: {ranked_places}")
-        else:
-            ranked_places = []
-            logging.warning("No places found from Google Places API.")
 
-        # Log message format before sending
-        message_data = {'latitude': latitude, 'longitude': longitude, 'places': ranked_places}
-        logging.debug(f"Sending message to WebSocket: {json.dumps(message_data)}")
-        await websocket.send_json(message_data)
+            # Send the ranked places to the WebSocket client
+            try:
+                await websocket.send_json({'latitude': latitude, 'longitude': longitude, 'places': ranked_places})
+                logging.info("Sent data to WebSocket client.")
+            except Exception as e:
+                logging.error(f"Error sending data to WebSocket: {e}")
+        else:
+            logging.warning("No places found from Google Places API.")
 
 async def start_rabbitmq_consumer(websocket: WebSocket, app_service: AppService):
     while True:
@@ -42,6 +43,5 @@ async def start_rabbitmq_consumer(websocket: WebSocket, app_service: AppService)
             logging.error(f"RabbitMQ connection error: {e}. Reconnecting in 5 seconds...")
             await asyncio.sleep(5)
         finally:
-            # Ensure that the connection is closed properly
             if connection and not connection.is_closed:
                 await connection.close()

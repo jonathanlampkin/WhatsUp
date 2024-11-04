@@ -6,6 +6,7 @@ from cachetools import TTLCache
 from dotenv import load_dotenv
 import aio_pika
 import asyncio
+import json
 
 load_dotenv()
 logging.basicConfig(level=logging.DEBUG)
@@ -61,6 +62,7 @@ class AppService:
         if not self.is_coordinates_cached(latitude, longitude):
             message = {"latitude": latitude, "longitude": longitude}
             await self.send_to_rabbitmq(message)
+            logging.debug(f"Sent coordinates to RabbitMQ: {message}")
 
     def is_coordinates_cached(self, latitude, longitude):
         return self.cache.get(f"{latitude}_{longitude}")
@@ -134,7 +136,7 @@ class AppService:
         async with connection:
             channel = await connection.channel()
             await channel.default_exchange.publish(
-                aio_pika.Message(body=str(message).encode()),
+                aio_pika.Message(body=json.dumps(message).encode()),
                 routing_key="coordinates_queue"
             )
         logging.debug(f"Sent coordinates to RabbitMQ: {message}")
