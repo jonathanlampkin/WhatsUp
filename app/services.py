@@ -107,13 +107,15 @@ class AppService:
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             ON CONFLICT (place_id) DO NOTHING
         ''', latitude, longitude, place.get("place_id"), place.get("name"), place.get("business_status"),
-           place.get("rating"), place.get("user_ratings_total"), place.get("vicinity"), 
-           place.get("types", []), place.get("price_level"), place.get("icon"),
-           place.get("icon_background_color"), place.get("icon_mask_base_uri"), 
-           (place['photos'][0]['photo_reference'] if 'photos' in place and place['photos'] else None), 
-           (place['photos'][0]['height'] if 'photos' in place and place['photos'] else None), 
-           (place['photos'][0]['width'] if 'photos' in place and place['photos'] else None), 
-           place.get("opening_hours", {}).get("open_now"))
+        place.get("rating"), place.get("user_ratings_total"), place.get("vicinity"), 
+        ','.join(place.get("types", [])),  # Join list into a string
+        place.get("price_level"), place.get("icon"),
+        place.get("icon_background_color"), place.get("icon_mask_base_uri"), 
+        (place['photos'][0]['photo_reference'] if 'photos' in place and place['photos'] else None), 
+        (place['photos'][0]['height'] if 'photos' in place and place['photos'] else None), 
+        (place['photos'][0]['width'] if 'photos' in place and place['photos'] else None), 
+        place.get("opening_hours", {}).get("open_now"))
+
 
     async def rank_nearby_places(self, latitude, longitude):
         """Retrieve and rank nearby places from the database."""

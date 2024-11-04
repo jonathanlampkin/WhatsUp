@@ -27,6 +27,7 @@ async def process_message(message: IncomingMessage, app_service: AppService, web
 
 
 
+
 async def start_rabbitmq_consumer(websocket: WebSocket, app_service: AppService):
     connection = await connect_robust(os.getenv("RABBITMQ_URL"))
     channel = await connection.channel()
