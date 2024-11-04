@@ -12,7 +12,6 @@ async def process_message(message: IncomingMessage, app_service: AppService, web
         longitude = coords['longitude']
         logging.info(f"Processing coordinates {latitude}, {longitude}")
 
-        # Fetch places from Google Places API
         places = await app_service.fetch_from_google_places_api(latitude, longitude)
         if places:
             await app_service.store_places_in_db_and_cache(latitude, longitude, places)
@@ -22,11 +21,7 @@ async def process_message(message: IncomingMessage, app_service: AppService, web
             ranked_places = []
             logging.warning("No places found from Google Places API.")
 
-        # Send the ranked places to the WebSocket client
         await websocket.send_json({'latitude': latitude, 'longitude': longitude, 'places': ranked_places})
-
-
-
 
 async def start_rabbitmq_consumer(websocket: WebSocket, app_service: AppService):
     connection = await connect_robust(os.getenv("RABBITMQ_URL"))

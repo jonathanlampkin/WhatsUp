@@ -10,13 +10,11 @@ import time
 import os
 from fastapi.staticfiles import StaticFiles
 
-# Load environment variables
 load_dotenv()
 app = FastAPI()
 app_service_instance = AppService()
-templates = Jinja2Templates(directory="app/templates")  # Update this line
+templates = Jinja2Templates(directory="app/templates")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
-
 
 # Prometheus metrics
 metrics = {
@@ -28,7 +26,6 @@ metrics = {
     "errors_counter": Counter('errors_total', 'Total number of errors')
 }
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 
 @app.on_event("startup")
@@ -58,7 +55,6 @@ def get_google_maps_key():
     if not google_maps_api_key:
         return JSONResponse({"error": "Google Maps API key is not set."}, status_code=500)
     return {"key": google_maps_api_key}
-
 
 @app.get('/health')
 async def health_check():
