@@ -8,12 +8,15 @@ from dotenv import load_dotenv
 import logging
 import time
 import os
+from fastapi.staticfiles import StaticFiles
 
 # Load environment variables
 load_dotenv()
 app = FastAPI()
-templates = Jinja2Templates(directory="app/templates")  # Update this line
 app_service_instance = AppService()
+templates = Jinja2Templates(directory="app/templates")  # Update this line
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
 
 # Prometheus metrics
 metrics = {
