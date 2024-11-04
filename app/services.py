@@ -79,7 +79,14 @@ class AppService:
                 'key': self.google_api_key
             }
             async with session.get("https://maps.googleapis.com/maps/api/place/nearbysearch/json", params=params) as response:
-                return await response.json() if response.status == 200 else []
+                if response.status == 200:
+                    result = await response.json()
+                    logging.info(f"Fetched {len(result['results'])} places from Google Places API.")
+                    return result.get('results', [])
+                else:
+                    logging.error(f"Error fetching places: {response.status}, {await response.text()}")
+                    return []
+
 
     async def store_places_in_db_and_cache(self, latitude, longitude, places):
         """Store fetched places in the database and cache."""

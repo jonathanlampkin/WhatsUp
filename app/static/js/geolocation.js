@@ -4,8 +4,8 @@ const placesList = document.getElementById('places-list');
 function loadGoogleMapsApi(apiKey) {
     const script = document.createElement('script');
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMap`;
-    script.async = true;
-    script.defer = true;
+    script.async = true; // Load API asynchronously
+    script.defer = true; // Defer execution
     document.head.appendChild(script);
 }
 
@@ -22,7 +22,7 @@ function initMap() {
                 zoom: 15,
             });
 
-            userMarker = new google.maps.Marker({
+            userMarker = new google.maps.marker.AdvancedMarkerElement({
                 position: userLocation,
                 map,
                 title: "Your Location",
@@ -68,8 +68,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
+        console.log("Received data:", data); // Log the received data
         const { latitude, longitude, places } = data;
-        displayNearbyPlaces(places);
+        
+        if (places && places.length > 0) {
+            displayNearbyPlaces(places);
+        } else {
+            console.warn("No places received or places array is empty.");
+        }
     };
 
     socket.onclose = () => {
@@ -92,7 +98,7 @@ function displayNearbyPlaces(places) {
         listItem.onclick = () => highlightPlace(place);
         placesList.appendChild(listItem);
 
-        const marker = new google.maps.Marker({
+        const marker = new google.maps.marker.AdvancedMarkerElement({
             position: { lat: place.latitude, lng: place.longitude },
             map,
             title: place.name,
