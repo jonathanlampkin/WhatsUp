@@ -12,8 +12,7 @@ MOCK_LONGITUDE = -122.4194
 
 class TestQueriesFunctions(unittest.IsolatedAsyncioTestCase):
 
-    @classmethod
-    async def asyncSetUpClass(cls):
+    async def asyncSetUp(self):
         # Ensure DATABASE_URL is set for testing
         test_db_url = os.getenv("DATABASE_URL")
         if not test_db_url:
@@ -23,19 +22,17 @@ class TestQueriesFunctions(unittest.IsolatedAsyncioTestCase):
         await init_db()
 
         # Initialize the AppService instance and connect the database pool
-        cls.app_service = AppService()
-        await cls.app_service.connect_db()  # Ensure database pool is connected
+        self.app_service = AppService()
+        await self.app_service.connect_db()  # Ensure database pool is connected
 
-    @classmethod
-    async def asyncTearDownClass(cls):
-        # Cleanup database and close the connection after all tests
-        await cls.cleanup_database()
-        await cls.app_service.db_pool.close()  # Close the database pool
+    async def asyncTearDown(self):
+        # Cleanup database and close the connection after each test
+        await self.cleanup_database()
+        await self.app_service.db_pool.close()  # Close the database pool
 
-    @classmethod
-    async def cleanup_database(cls):
+    async def cleanup_database(self):
         """Helper method to clear test data from database."""
-        async with cls.app_service.db_pool.acquire() as conn:
+        async with self.app_service.db_pool.acquire() as conn:
             await conn.execute("DELETE FROM user_coordinates;")
             await conn.execute("DELETE FROM google_nearby_places;")
 
