@@ -71,11 +71,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = JSON.parse(event.data);
             console.log("Received data from WebSocket:", data);
 
-            const { latitude, longitude, places } = data;
-            if (places && places.length > 0) {
-                displayNearbyPlaces(places);
+            // Check if data has the expected structure
+            if (data && data.latitude && data.longitude && Array.isArray(data.places)) {
+                const { latitude, longitude, places } = data;
+                
+                console.log(`Coordinates received: ${latitude}, ${longitude}`);
+                console.log(`Number of places received: ${places.length}`);
+
+                if (places.length > 0) {
+                    displayNearbyPlaces(places);
+                } else {
+                    console.warn("No places received or places array is empty.");
+                }
             } else {
-                console.warn("No places received or places array is empty.");
+                console.warn("Unexpected data structure received from WebSocket:", data);
             }
         } catch (error) {
             console.error("Error parsing WebSocket message:", error);
