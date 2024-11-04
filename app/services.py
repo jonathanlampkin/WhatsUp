@@ -71,7 +71,8 @@ class AppService:
 
     async def fetch_from_google_places_api(self, latitude, longitude, radius=5000, place_type="restaurant"):
         """Fetch nearby places from Google Places API."""
-        async with aiohttp.ClientSession() as session:
+        timeout = aiohttp.ClientTimeout(total=10)  # Set a 10-second timeout
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             params = {
                 'location': f"{latitude},{longitude}",
                 'radius': radius,
@@ -86,6 +87,7 @@ class AppService:
                 else:
                     logging.error(f"Error fetching places: {response.status}, {await response.text()}")
                     return []
+
 
 
     async def store_places_in_db_and_cache(self, latitude, longitude, places):
@@ -119,6 +121,8 @@ class AppService:
 
     async def rank_nearby_places(self, latitude, longitude):
         """Retrieve and rank nearby places from the database."""
+        latitude = round(latitude, 4)
+        longitude = round(longitude, 4)
         async with self.db_pool.acquire() as conn:
             query = '''
                 SELECT name, rating, user_ratings_total, price_level, open_now, 
@@ -129,6 +133,7 @@ class AppService:
                 LIMIT 10;
             '''
             return await conn.fetch(query, latitude, longitude)
+
 
     async def send_to_rabbitmq(self, message):
         """Send a message to RabbitMQ."""

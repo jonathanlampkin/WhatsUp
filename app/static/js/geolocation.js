@@ -22,7 +22,7 @@ function initMap() {
                 zoom: 15,
             });
 
-            userMarker = new google.maps.marker.AdvancedMarkerElement({
+            userMarker = new google.maps.Marker({
                 position: userLocation,
                 map,
                 title: "Your Location",
@@ -98,7 +98,7 @@ function displayNearbyPlaces(places) {
         listItem.onclick = () => highlightPlace(place);
         placesList.appendChild(listItem);
 
-        const marker = new google.maps.marker.AdvancedMarkerElement({
+        const marker = new google.maps.Marker({
             position: { lat: place.latitude, lng: place.longitude },
             map,
             title: place.name,
