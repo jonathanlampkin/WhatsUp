@@ -20,6 +20,30 @@ class AppService:
         """Initialize a database connection pool."""
         self.db_pool = await asyncpg.create_pool(dsn=os.getenv("DATABASE_URL"))
 
+    async def generate_entry(self, latitude, longitude):
+        """Generate a unique entry for given coordinates."""
+        if not await self.check_coordinates_in_db(latitude, longitude):
+            async with self.db_pool.acquire() as conn:
+                await conn.execute('''
+                    INSERT INTO user_coordinates (latitude, longitude) 
+                    VALUES ($1, $2)
+                    ON CONFLICT DO NOTHING;
+                ''', latitude, longitude)
+
+    async def process_coordinates(self, latitude, longitude):
+        """Process coordinates by checking cache, database, and Google Places API."""
+        if self.is_coordinates_cached(latitude, longitude):
+            return await self.rank_nearby_places(latitude, longitude)
+        
+        if await self.check_coordinates_in_db(latitude, longitude):
+            return await self.rank_nearby_places(latitude, longitude)
+        
+        places = await self.fetch_from_google_places_api(latitude, longitude)
+        if places:
+            await self.store_places_in_db_and_cache(latitude, longitude, places)
+            return await self.rank_nearby_places(latitude, longitude)
+        return []
+
     async def send_coordinates_if_not_cached(self, latitude, longitude):
         """Send coordinates to RabbitMQ if they are not cached."""
         if not self.is_coordinates_cached(latitude, longitude):
@@ -33,7 +57,7 @@ class AppService:
     async def check_coordinates_in_db(self, latitude, longitude):
         """Check if coordinates already exist in the database."""
         async with self.db_pool.acquire() as conn:
-            query = "SELECT 1 FROM google_nearby_places WHERE latitude = $1 AND longitude = $2"
+            query = "SELECT 1 FROM user_coordinates WHERE latitude = $1 AND longitude = $2"
             result = await conn.fetchrow(query, latitude, longitude)
             return result is not None
 
@@ -54,23 +78,27 @@ class AppService:
         async with self.db_pool.acquire() as conn:
             async with conn.transaction():
                 for place in places:
-                    await conn.execute('''
-                        INSERT INTO google_nearby_places (
-                            latitude, longitude, place_id, name, business_status, rating, 
-                            user_ratings_total, vicinity, types, price_level, icon, 
-                            icon_background_color, icon_mask_base_uri, photo_reference, 
-                            photo_height, photo_width, open_now
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-                        ON CONFLICT (place_id) DO NOTHING
-                    ''', latitude, longitude, place.get("place_id"), place.get("name"), place.get("business_status"),
-                       place.get("rating"), place.get("user_ratings_total"), place.get("vicinity"), 
-                       place.get("types", []), place.get("price_level"), place.get("icon"),
-                       place.get("icon_background_color"), place.get("icon_mask_base_uri"), 
-                       (place['photos'][0]['photo_reference'] if 'photos' in place and place['photos'] else None), 
-                       (place['photos'][0]['height'] if 'photos' in place and place['photos'] else None), 
-                       (place['photos'][0]['width'] if 'photos' in place and place['photos'] else None), 
-                       place.get("opening_hours", {}).get("open_now"))
+                    await self.insert_place_data(conn, latitude, longitude, place)
         self.cache[f"{latitude}_{longitude}"] = places
+
+    async def insert_place_data(self, conn, latitude, longitude, place):
+        """Insert individual place data into the database."""
+        await conn.execute('''
+            INSERT INTO google_nearby_places (
+                latitude, longitude, place_id, name, business_status, rating, 
+                user_ratings_total, vicinity, types, price_level, icon, 
+                icon_background_color, icon_mask_base_uri, photo_reference, 
+                photo_height, photo_width, open_now
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            ON CONFLICT (place_id) DO NOTHING
+        ''', latitude, longitude, place.get("place_id"), place.get("name"), place.get("business_status"),
+           place.get("rating"), place.get("user_ratings_total"), place.get("vicinity"), 
+           place.get("types", []), place.get("price_level"), place.get("icon"),
+           place.get("icon_background_color"), place.get("icon_mask_base_uri"), 
+           (place['photos'][0]['photo_reference'] if 'photos' in place and place['photos'] else None), 
+           (place['photos'][0]['height'] if 'photos' in place and place['photos'] else None), 
+           (place['photos'][0]['width'] if 'photos' in place and place['photos'] else None), 
+           place.get("opening_hours", {}).get("open_now"))
 
     async def rank_nearby_places(self, latitude, longitude):
         """Retrieve and rank nearby places from the database."""
