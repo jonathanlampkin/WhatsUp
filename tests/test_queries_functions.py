@@ -6,7 +6,6 @@ from app.services import AppService
 from unittest.mock import patch
 from dotenv import load_dotenv
 
-# Load environment variables explicitly for the test environment
 load_dotenv()
 
 MOCK_LATITUDE = 37.7749
@@ -16,16 +15,16 @@ class TestQueriesFunctions(unittest.IsolatedAsyncioTestCase):
 
     @classmethod
     async def asyncSetUpClass(cls):
-        # Verify DATABASE_URL is set for testing
+        # Ensure environment variable DATABASE_URL is set for testing
         test_db_url = os.getenv("DATABASE_URL")
         if not test_db_url:
             raise EnvironmentError("DATABASE_URL for testing is not set in environment variables.")
         
         # Run init_db asynchronously
         await init_db()
-        cls.connection = await get_db_connection()
 
-        # Initialize AppService without any parameters
+        # Initialize connection pool and app service
+        cls.connection = await get_db_connection()
         cls.app_service = AppService()
         await cls.app_service.connect_db()
 
@@ -36,7 +35,6 @@ class TestQueriesFunctions(unittest.IsolatedAsyncioTestCase):
 
     @classmethod
     async def cleanup_database(cls):
-        """Helper method to clear test data from database."""
         async with cls.connection.transaction():
             await cls.connection.execute("DELETE FROM user_coordinates;")
             await cls.connection.execute("DELETE FROM google_nearby_places;")
@@ -69,7 +67,6 @@ class TestQueriesFunctions(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ranked_places[0]['name'], "Place C", "Highest-rated place is not ranked first.")
 
     async def insert_mock_places(self, data):
-        """Helper function to insert mock data for testing ranking."""
         await self.connection.executemany('''
             INSERT INTO google_nearby_places (
                 latitude, longitude, place_id, name, business_status, rating, 
