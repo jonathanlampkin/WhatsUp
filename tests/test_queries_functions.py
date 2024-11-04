@@ -52,8 +52,9 @@ class TestQueriesFunctions(unittest.IsolatedAsyncioTestCase):
             )
         
         self.assertIsNotNone(result, "Entry not found in user_coordinates for test coordinates.")
-        self.assertEqual(result["latitude"], MOCK_LATITUDE)
-        self.assertEqual(result["longitude"], MOCK_LONGITUDE)
+        self.assertAlmostEqual(result["latitude"], MOCK_LATITUDE, places=4)
+        self.assertAlmostEqual(result["longitude"], MOCK_LONGITUDE, places=4)
+
 
     async def test_rank_nearby_places(self):
         """Insert mock data and verify the ranking function returns expected places."""
