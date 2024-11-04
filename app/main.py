@@ -12,7 +12,7 @@ import os
 # Load environment variables
 load_dotenv()
 app = FastAPI()
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="app/templates")  # Update this line
 app_service_instance = AppService()
 
 # Prometheus metrics
@@ -31,7 +31,6 @@ logging.basicConfig(level=logging.INFO)
 @app.on_event("startup")
 async def startup_event():
     await app_service_instance.initialize()
-
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
