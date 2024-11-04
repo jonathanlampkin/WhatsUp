@@ -1,8 +1,8 @@
 import os
-import psycopg2
+import asyncpg
 import logging
-from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
+import asyncio
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -11,14 +11,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:admin@localhost:
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-def get_db_connection():
-    return psycopg2.connect(dsn=DATABASE_URL, cursor_factory=RealDictCursor)
-
-def init_db():
-    connection = get_db_connection()
-    cursor = connection.cursor()
+async def init_db():
+    conn = await asyncpg.connect(DATABASE_URL)
     try:
-        cursor.execute('''
+        await conn.execute('''
             CREATE TABLE IF NOT EXISTS user_coordinates (
                 id SERIAL PRIMARY KEY,
                 visitor_id TEXT,
@@ -29,7 +25,7 @@ def init_db():
             )
         ''')
 
-        cursor.execute('''
+        await conn.execute('''
             CREATE TABLE IF NOT EXISTS google_nearby_places (
                 id SERIAL PRIMARY KEY,
                 latitude REAL,
@@ -51,13 +47,11 @@ def init_db():
                 open_now BOOLEAN
             )
         ''')
-        connection.commit()
+        logging.info("Database initialized successfully.")
     except Exception as e:
         logging.error(f"Error initializing database: {e}")
     finally:
-        cursor.close()
-        connection.close()
-        logging.info("Database initialized successfully.")
+        await conn.close()
 
 if __name__ == "__main__":
-    init_db()
+    asyncio.run(init_db())
